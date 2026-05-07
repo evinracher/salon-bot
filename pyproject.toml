@@ -14,6 +14,9 @@ dependencies = [
     "structlog>=25.5.0",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [dependency-groups]
 dev = [
     "mypy>=2.0.0",

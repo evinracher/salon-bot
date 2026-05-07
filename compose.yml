@@ -1,15 +1,17 @@
 services:
   db:
-    image: postgres
+    image: postgres:16-bookworm
     shm_size: 128mb
     environment:
-      POSTGRES_DB: salon_bot
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - 5432:5432
+      # Avoid clashing with a local Postgres/Supabase on 5432
+      - "${DB_PORT}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh
   adminer:
     image: adminer
     ports:

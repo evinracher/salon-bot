@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments (uv uses .venv by default)
+.venv/
+venv/
+ENV/
+env/
+
+# uv: commit uv.lock (reproducible installs)
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit tests / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checkers & linters
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+
+# Jupyter (if used later)
+.ipynb_checkpoints/
+
+# Environment & secrets (pydantic-settings / dotenv)
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# IDEs / editors
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & local scratch
+*.log
+*.sqlite3

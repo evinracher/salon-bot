@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_session
 from app.models.appointment import Appointment
 from app.models.employee import Employee
@@ -14,6 +15,11 @@ from app.schemas.appointment import (
     AppointmentRead,
     AppointmentStatus,
     AppointmentUpdate,
+)
+from app.services.datetime_utils import (
+    is_future_in_reference_tz,
+    is_slot_boundary_in_timezone,
+    is_slot_duration_aligned,
 )
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
@@ -63,12 +69,51 @@ def _validate_time_window(start_time: datetime, end_time: datetime) -> None:
         )
 
 
+def _validate_future_start_time(start_time: datetime) -> None:
+    if not is_future_in_reference_tz(start_time):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_time must be in the future",
+        )
+
+
+def _validate_slot_alignment(start_time: datetime, end_time: datetime) -> None:
+    interval = settings.slot_interval_minutes
+
+    aligned_start = is_slot_boundary_in_timezone(
+        value=start_time,
+        interval_minutes=interval,
+        timezone_name=settings.timezone,
+    )
+    aligned_end = is_slot_boundary_in_timezone(
+        value=end_time,
+        interval_minutes=interval,
+        timezone_name=settings.timezone,
+    )
+    aligned_duration = is_slot_duration_aligned(
+        start=start_time,
+        end=end_time,
+        interval_minutes=interval,
+    )
+
+    if not (aligned_start and aligned_end and aligned_duration):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Appointment times must align to slot interval "
+                f"({interval} minutes) in {settings.timezone}"
+            ),
+        )
+
+
 @router.post("", response_model=AppointmentRead, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
     body: AppointmentCreate,
     session: SessionDep,
 ) -> Appointment:
     await _ensure_refs_exist(session, body.employee_id, body.service_id)
+    _validate_slot_alignment(body.start_time, body.end_time)
+    _validate_future_start_time(body.start_time)
 
     if body.status != AppointmentStatus.CANCELLED:
         has_conflict = await _has_conflict(
@@ -142,6 +187,8 @@ async def update_appointment(
     target_status = payload.get("status", AppointmentStatus(appointment.status))
 
     _validate_time_window(target_start_time, target_end_time)
+    _validate_slot_alignment(target_start_time, target_end_time)
+    _validate_future_start_time(target_start_time)
     await _ensure_refs_exist(session, target_employee_id, target_service_id)
 
     if target_status != AppointmentStatus.CANCELLED:

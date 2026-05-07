@@ -37,17 +37,16 @@ class Settings(BaseSettings):
         db_name = payload.get("db_name", "salon_bot")
         test_db_name = payload.get("test_db_name", "salon_bot_test")
 
-        payload.setdefault(
-            "database_url",
-            f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}",
-        )
-        payload.setdefault(
-            "test_database_url",
-            (
+        if not payload.get("database_url"):
+            payload["database_url"] = (
+                f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+            )
+
+        if not payload.get("test_database_url"):
+            payload["test_database_url"] = (
                 f"postgresql+asyncpg://{db_user}:{db_password}"
                 f"@{db_host}:{db_port}/{test_db_name}"
-            ),
-        )
+            )
         return payload
 
 

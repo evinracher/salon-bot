@@ -1,20 +1,16 @@
 import asyncio
-import sys
 from logging.config import fileConfig
-from pathlib import Path
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-_ROOT = Path(__file__).resolve().parents[1]
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
+from app.config import settings
+from app.db import Base, asyncpg_connect_args
+from app.models import Appointment, Employee, EmployeeService, Service
 
-from app.config import settings  # noqa: E402
-from app.db import Base, asyncpg_connect_args  # noqa: E402
-from app.models import Employee  # noqa: F401, E402
+_model_registry = (Appointment, Employee, EmployeeService, Service)
 
 config = context.config
 if config.config_file_name is not None:

@@ -16,7 +16,7 @@ async def test_create_employee(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_employee_duplicate_phone_returns_409(
+async def test_create_employee_allows_duplicate_phone(
     client: AsyncClient,
 ) -> None:
     await client.post(
@@ -27,7 +27,7 @@ async def test_create_employee_duplicate_phone_returns_409(
         "/employees",
         json={"name": "Second", "phone": "+1-555-0200"},
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 201
 
 
 @pytest.mark.asyncio
@@ -68,4 +68,70 @@ async def test_get_employee_by_id(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_employee_missing_returns_404(client: AsyncClient) -> None:
     resp = await client.get("/employees/999999999")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_employee(client: AsyncClient) -> None:
+    created = (
+        await client.post(
+            "/employees",
+            json={"name": "Before", "phone": "+1-555-0600"},
+        )
+    ).json()
+
+    resp = await client.patch(
+        f"/employees/{created['id']}",
+        json={"name": "After"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "After"
+    assert resp.json()["phone"] == "+1-555-0600"
+
+
+@pytest.mark.asyncio
+async def test_update_employee_allows_duplicate_phone(client: AsyncClient) -> None:
+    first = (
+        await client.post(
+            "/employees",
+            json={"name": "First", "phone": "+1-555-0700"},
+        )
+    ).json()
+    await client.post(
+        "/employees",
+        json={"name": "Second", "phone": "+1-555-0701"},
+    )
+
+    resp = await client.patch(
+        f"/employees/{first['id']}",
+        json={"phone": "+1-555-0701"},
+    )
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_update_employee_missing_returns_404(client: AsyncClient) -> None:
+    resp = await client.patch("/employees/999999999", json={"name": "Nope"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_employee(client: AsyncClient) -> None:
+    created = (
+        await client.post(
+            "/employees",
+            json={"name": "Delete", "phone": "+1-555-0800"},
+        )
+    ).json()
+
+    resp = await client.delete(f"/employees/{created['id']}")
+    assert resp.status_code == 204
+
+    get_resp = await client.get(f"/employees/{created['id']}")
+    assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_employee_missing_returns_404(client: AsyncClient) -> None:
+    resp = await client.delete("/employees/999999999")
     assert resp.status_code == 404

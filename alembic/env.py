@@ -8,9 +8,18 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
 from app.db import Base, asyncpg_connect_args
+from app.chat.models.conversation import Conversation
+from app.chat.models.message import Message
 from app.models import Appointment, Employee, EmployeeService, Service
 
-_model_registry = (Appointment, Employee, EmployeeService, Service)
+_model_registry = (
+    Appointment,
+    Employee,
+    EmployeeService,
+    Service,
+    Conversation,
+    Message,
+)
 
 config = context.config
 if config.config_file_name is not None:

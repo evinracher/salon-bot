@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     business_open_time: time = time(hour=10, minute=0)
     business_close_time: time = time(hour=19, minute=0)
     business_days: str = "mon,tue,wed,thu,fri,sat"
+    cors_allowed_origins: str = "*"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    chat_history_window: int = 10
+    chat_manager_pause_minutes: int = 120
+    chat_max_tool_iters: int = 6
 
     # Optional explicit env var overrides; computed if omitted.
     database_url: str = ""

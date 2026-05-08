@@ -1,8 +1,14 @@
 from collections.abc import AsyncIterator
 
 from sqlalchemy import MetaData
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
+from fastapi import Request
 
 from app.config import settings
 
@@ -26,16 +32,52 @@ def asyncpg_connect_args(url: str) -> dict[str, bool]:
     return {}
 
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-    connect_args=asyncpg_connect_args(settings.database_url),
-)
-async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
+_engine: AsyncEngine | None = None
+_async_session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
-async def get_session() -> AsyncIterator[AsyncSession]:
-    async with async_session_maker() as session:
+def init_db_runtime(
+    database_url: str | None = None,
+) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+    global _engine, _async_session_maker
+    if _engine is not None and _async_session_maker is not None:
+        return _engine, _async_session_maker
+
+    url = database_url or settings.database_url
+    _engine = create_async_engine(
+        url,
+        echo=False,
+        connect_args=asyncpg_connect_args(url),
+    )
+    _async_session_maker = async_sessionmaker(_engine, expire_on_commit=False)
+    return _engine, _async_session_maker
+
+
+def get_engine() -> AsyncEngine:
+    if _engine is None:
+        raise RuntimeError("Database engine is not initialized")
+    return _engine
+
+
+def get_session_maker() -> async_sessionmaker[AsyncSession]:
+    if _async_session_maker is None:
+        raise RuntimeError("Database session maker is not initialized")
+    return _async_session_maker
+
+
+async def dispose_db_runtime() -> None:
+    global _engine, _async_session_maker
+    if _engine is not None:
+        await _engine.dispose()
+    _engine = None
+    _async_session_maker = None
+
+
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    session_maker = (
+        getattr(request.app.state, "db_session_maker", None) or get_session_maker()
+    )
+    async with session_maker() as session:
         try:
             yield session
         except Exception:

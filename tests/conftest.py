@@ -9,7 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from app.config import settings
-from app.db import engine
+from app.db import get_engine, init_db_runtime
 from app.main import app
 
 
@@ -22,7 +22,8 @@ def _alembic_upgrade() -> None:
 
 @pytest_asyncio.fixture(autouse=True)
 async def _truncate_tables() -> AsyncIterator[None]:
-    async with engine.begin() as conn:
+    init_db_runtime(settings.database_url)
+    async with get_engine().begin() as conn:
         await conn.execute(
             text(
                 "TRUNCATE employees, services, employee_services, appointments, "
@@ -31,7 +32,8 @@ async def _truncate_tables() -> AsyncIterator[None]:
             ),
         )
     yield
-    async with engine.begin() as conn:
+    init_db_runtime(settings.database_url)
+    async with get_engine().begin() as conn:
         await conn.execute(
             text(
                 "TRUNCATE employees, services, employee_services, appointments, "

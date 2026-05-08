@@ -3,7 +3,11 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from app.chat.agent.runner import _is_booking_confirmation, run_turn
+from app.chat.agent.runner import (
+    _has_pending_booking_prompt,
+    _is_booking_confirmation,
+    run_turn,
+)
 
 
 class FakeGraph:
@@ -51,6 +55,20 @@ def test_is_booking_confirmation_variants() -> None:
     assert _is_booking_confirmation("confirm")
     assert not _is_booking_confirmation("maybe")
     assert not _is_booking_confirmation("what times are available?")
+
+
+def test_has_pending_booking_prompt_detects_confirmation_request() -> None:
+    history = [
+        SimpleNamespace(role="customer", content="book me"),
+        SimpleNamespace(role="bot", content="Please confirm appointment details."),
+    ]
+    assert _has_pending_booking_prompt(history)
+
+    history_without_prompt = [
+        SimpleNamespace(role="customer", content="book me"),
+        SimpleNamespace(role="bot", content="Here are available slots"),
+    ]
+    assert not _has_pending_booking_prompt(history_without_prompt)
 
 
 class FakeToolGraph:

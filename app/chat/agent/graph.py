@@ -1,5 +1,11 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message="The default value of `allowed_objects` will change in a future version.*",
+)
 
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -9,6 +15,10 @@ from pydantic import SecretStr
 
 from app.chat.agent.tools import ALL_TOOLS
 from app.config import settings
+
+
+def _checkpointer_conn_string(database_url: str) -> str:
+    return database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
 
 
 def build_graph(checkpointer: AsyncPostgresSaver) -> CompiledStateGraph:
@@ -27,7 +37,7 @@ async def graph_with_checkpointer() -> AsyncIterator[
     tuple[CompiledStateGraph, AsyncPostgresSaver]
 ]:
     async with AsyncPostgresSaver.from_conn_string(
-        settings.database_url
+        _checkpointer_conn_string(settings.database_url)
     ) as checkpointer:
         await checkpointer.setup()
         graph = build_graph(checkpointer)

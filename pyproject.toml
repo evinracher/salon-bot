@@ -34,6 +34,9 @@ pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+filterwarnings = [
+    "ignore:The default value of `allowed_objects` will change in a future version.*:langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
+]
 
 [dependency-groups]
 dev = [

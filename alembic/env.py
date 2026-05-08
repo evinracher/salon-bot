@@ -12,7 +12,7 @@ from app.chat.models.conversation import Conversation
 from app.chat.models.message import Message
 from app.models import Appointment, Employee, EmployeeService, Service
 
-_model_registry = (
+_models_for_alembic = (
     Appointment,
     Employee,
     EmployeeService,

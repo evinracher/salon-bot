@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient
+from app.main import app
 
 
 @pytest.mark.asyncio
@@ -128,3 +129,11 @@ async def test_chat_customer_message_returns_sanitized_error_on_agent_failure(
     )
     assert resp.status_code == 500
     assert resp.json()["detail"] == "chat agent failed to process message"
+
+
+@pytest.mark.asyncio
+async def test_chat_returns_503_when_runtime_unavailable(client: AsyncClient) -> None:
+    app.state.chat_available = False
+    resp = await client.get("/chat/conversations")
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "chat runtime unavailable"

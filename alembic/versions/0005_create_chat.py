@@ -9,6 +9,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0005_create_chat"
 down_revision: str | Sequence[str] | None = "0004_appointments"
@@ -50,7 +51,7 @@ def upgrade() -> None:
         sa.Column("conversation_phone", sa.String(length=32), nullable=False),
         sa.Column("role", sa.String(length=16), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("tool_calls", sa.JSON(), nullable=True),
+        sa.Column("tool_calls", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("tool_call_id", sa.String(length=128), nullable=True),
         sa.Column("provider_message_id", sa.String(length=128), nullable=True),
         sa.Column(
@@ -78,15 +79,13 @@ def upgrade() -> None:
     )
 
     op.create_index(
-        "ix_messages_conversation_phone_created_at_desc",
+        "ix_messages_conversation_phone_created_at",
         "messages",
         ["conversation_phone", "created_at"],
     )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_messages_conversation_phone_created_at_desc", table_name="messages"
-    )
+    op.drop_index("ix_messages_conversation_phone_created_at", table_name="messages")
     op.drop_table("messages")
     op.drop_table("conversations")

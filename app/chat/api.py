@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from app.chat.agent.runner import run_turn
-from app.chat.deps import get_compiled_graph
+from app.chat.deps import ensure_chat_available, get_compiled_graph
 from app.chat.models.conversation import Conversation
 from app.chat.models.message import Message, MessageRole
 from app.chat.schemas import (
@@ -27,7 +27,9 @@ from app.chat.service import (
 from app.config import settings
 from app.db import get_session
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(
+    prefix="/chat", tags=["chat"], dependencies=[Depends(ensure_chat_available)]
+)
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 logger = structlog.get_logger(__name__)
 

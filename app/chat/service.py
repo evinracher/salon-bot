@@ -8,6 +8,12 @@ from app.chat.models.message import Message, MessageRole
 from app.config import settings
 
 
+def _pause_until(minutes: int | None) -> datetime | None:
+    if minutes is None:
+        return None
+    return datetime.now().astimezone() + timedelta(minutes=minutes)
+
+
 async def get_or_create_conversation(
     session: AsyncSession, phone: str, customer_name: str | None = None
 ) -> Conversation:
@@ -34,11 +40,7 @@ async def set_bot_enabled(
 ) -> Conversation:
     conversation = await get_or_create_conversation(session, phone=phone)
     conversation.bot_enabled = enabled
-    conversation.bot_paused_until = (
-        datetime.now().astimezone() + timedelta(minutes=pause_minutes)
-        if pause_minutes is not None
-        else None
-    )
+    conversation.bot_paused_until = _pause_until(pause_minutes)
     await session.commit()
     await session.refresh(conversation)
     return conversation
@@ -62,10 +64,8 @@ async def apply_manager_pause(
 ) -> Conversation:
     conversation = await get_or_create_conversation(session, phone=phone)
     if conversation.bot_enabled:
-        conversation.bot_paused_until = datetime.now().astimezone() + timedelta(
-            minutes=minutes
-            if minutes is not None
-            else settings.chat_manager_pause_minutes
+        conversation.bot_paused_until = _pause_until(
+            minutes if minutes is not None else settings.chat_manager_pause_minutes
         )
         await session.commit()
         await session.refresh(conversation)
@@ -83,6 +83,17 @@ async def append_message(
     provider_message_id: str | None = None,
 ) -> tuple[Conversation, Message]:
     conversation = await get_or_create_conversation(session, phone=phone)
+    if role == MessageRole.TOOL and tool_call_id:
+        existing = await session.scalar(
+            select(Message).where(
+                Message.conversation_phone == phone,
+                Message.role == MessageRole.TOOL.value,
+                Message.tool_call_id == tool_call_id,
+            )
+        )
+        if existing is not None:
+            return conversation, existing
+
     message = Message(
         conversation_phone=phone,
         role=role.value,

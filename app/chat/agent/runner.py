@@ -34,6 +34,18 @@ def _is_booking_confirmation(text: str) -> bool:
     }
 
 
+def _has_pending_booking_prompt(history: list[Any]) -> bool:
+    for msg in reversed(history):
+        role = getattr(msg, "role", "")
+        if role not in (MessageRole.BOT.value, MessageRole.SYSTEM.value):
+            continue
+        content = (msg.content or "").lower()
+        if "confirm" in content and ("appointment" in content or "book" in content):
+            return True
+        break
+    return False
+
+
 async def run_turn(
     *,
     graph: Any,
@@ -60,7 +72,9 @@ async def run_turn(
 
     token_session = current_session.set(session)
     token_phone = current_phone.set(phone)
-    token_confirm = current_booking_confirmed.set(_is_booking_confirmation(user_text))
+    token_confirm = current_booking_confirmed.set(
+        _is_booking_confirmation(user_text) and _has_pending_booking_prompt(history)
+    )
     try:
         result = await graph.ainvoke(
             {"messages": input_messages},
@@ -79,6 +93,13 @@ async def run_turn(
 
     for msg in new_messages:
         if isinstance(msg, AIMessage) and msg.tool_calls:
+            call_ids = [
+                call_id
+                for tc in msg.tool_calls
+                for call_id in [tc.get("id")]
+                if isinstance(call_id, str)
+            ]
+            tool_call_id = ",".join(sorted(call_ids)) if call_ids else None
             tool_calls_payload: list[dict[str, Any]] = [
                 dict(tc) for tc in msg.tool_calls
             ]
@@ -88,6 +109,7 @@ async def run_turn(
                 role=MessageRole.TOOL,
                 content=msg.text or "tool_calls",
                 tool_calls=tool_calls_payload,
+                tool_call_id=tool_call_id,
             )
         if isinstance(msg, ToolMessage):
             await append_message(

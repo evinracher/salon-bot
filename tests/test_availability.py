@@ -24,6 +24,15 @@ async def _create_service(client: AsyncClient, suffix: str, duration: int) -> di
     ).json()
 
 
+async def _create_customer(client: AsyncClient, suffix: str) -> dict:
+    return (
+        await client.post(
+            "/customers",
+            json={"name": f"Cust{suffix}", "phone": f"+1-666-{suffix}00"},
+        )
+    ).json()
+
+
 async def _link_employee_service(
     client: AsyncClient, employee_id: int, service_id: int
 ) -> None:
@@ -102,6 +111,7 @@ async def test_availability_employee_filter_and_union_behavior(
 ) -> None:
     employee_1 = await _create_employee(client, "a5")
     employee_2 = await _create_employee(client, "a6")
+    customer = await _create_customer(client, "a5")
     service = await _create_service(client, "a5", duration=30)
     await _link_employee_service(client, employee_1["id"], service["id"])
     await _link_employee_service(client, employee_2["id"], service["id"])
@@ -109,10 +119,9 @@ async def test_availability_employee_filter_and_union_behavior(
     appointment = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee_1["id"],
             "service_id": service["id"],
-            "client_name": "Busy",
-            "client_phone": "+1-777-1000",
             "start_time": "2026-05-11T10:00:00-05:00",
             "end_time": "2026-05-11T10:30:00-05:00",
             "status": "scheduled",
@@ -157,16 +166,16 @@ async def test_availability_cancelled_appointment_does_not_block(
     client: AsyncClient,
 ) -> None:
     employee = await _create_employee(client, "a8")
+    customer = await _create_customer(client, "a8")
     service = await _create_service(client, "a8", duration=30)
     await _link_employee_service(client, employee["id"], service["id"])
 
     cancelled = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "client_name": "Cancelled",
-            "client_phone": "+1-777-1001",
             "start_time": "2026-05-11T10:00:00-05:00",
             "end_time": "2026-05-11T10:30:00-05:00",
             "status": "cancelled",
@@ -220,16 +229,16 @@ async def test_availability_restarts_exactly_at_appointment_end(
     client: AsyncClient,
 ) -> None:
     employee = await _create_employee(client, "b2")
+    customer = await _create_customer(client, "b2")
     service = await _create_service(client, "b2", duration=30)
     await _link_employee_service(client, employee["id"], service["id"])
 
     existing = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "client_name": "Boundary",
-            "client_phone": "+1-777-1111",
             "start_time": "2026-05-11T11:00:00-05:00",
             "end_time": "2026-05-11T11:30:00-05:00",
             "status": "scheduled",
@@ -251,16 +260,16 @@ async def test_availability_rejects_microsecond_appointment_payload(
     client: AsyncClient,
 ) -> None:
     employee = await _create_employee(client, "b3")
+    customer = await _create_customer(client, "b3")
     service = await _create_service(client, "b3", duration=60)
     await _link_employee_service(client, employee["id"], service["id"])
 
     appointment = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "client_name": "Micro",
-            "client_phone": "+1-777-1112",
             "start_time": "2026-05-07T15:00:00.075000Z",
             "end_time": "2026-05-07T16:30:00.075000Z",
             "status": "scheduled",

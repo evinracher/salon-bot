@@ -25,8 +25,9 @@ class Appointment(Base):
     service_id: Mapped[int] = mapped_column(
         ForeignKey("services.id", ondelete="RESTRICT"),
     )
-    client_name: Mapped[str] = mapped_column(String(120))
-    client_phone: Mapped[str] = mapped_column(String(32))
+    customer_id: Mapped[int] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+    )
     start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(20), default="scheduled")

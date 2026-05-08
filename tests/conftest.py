@@ -25,7 +25,8 @@ async def _truncate_tables() -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE employees, services, employee_services, appointments "
+                "TRUNCATE employees, services, customers, conversations, "
+                "employee_services, appointments "
                 "RESTART IDENTITY CASCADE",
             ),
         )
@@ -33,7 +34,8 @@ async def _truncate_tables() -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE employees, services, employee_services, appointments "
+                "TRUNCATE employees, services, customers, conversations, "
+                "employee_services, appointments "
                 "RESTART IDENTITY CASCADE",
             ),
         )

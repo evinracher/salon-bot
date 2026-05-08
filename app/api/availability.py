@@ -46,7 +46,7 @@ async def get_availability(
         or selected_duration_minutes % settings.slot_interval_minutes != 0
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Service duration must be aligned to slot interval",
         )
 

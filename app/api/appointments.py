@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_session
 from app.models.appointment import Appointment
+from app.models.customer import Customer
 from app.models.employee import Employee
 from app.models.service import Service
 from app.schemas.appointment import (
@@ -28,9 +29,15 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 async def _ensure_refs_exist(
     session: AsyncSession,
+    customer_id: int,
     employee_id: int,
     service_id: int,
 ) -> None:
+    customer = await session.get(Customer, customer_id)
+    if customer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found"
+        )
     employee = await session.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(
@@ -64,7 +71,7 @@ async def _has_conflict(
 def _validate_time_window(start_time: datetime, end_time: datetime) -> None:
     if end_time <= start_time:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="end_time must be after start_time",
         )
 
@@ -72,7 +79,7 @@ def _validate_time_window(start_time: datetime, end_time: datetime) -> None:
 def _validate_future_start_time(start_time: datetime) -> None:
     if not is_future_in_reference_tz(start_time):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="start_time must be in the future",
         )
 
@@ -98,7 +105,7 @@ def _validate_slot_alignment(start_time: datetime, end_time: datetime) -> None:
 
     if not (aligned_start and aligned_end and aligned_duration):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "Appointment times must align to slot interval "
                 f"({interval} minutes) in {settings.timezone}"
@@ -111,7 +118,9 @@ async def create_appointment(
     body: AppointmentCreate,
     session: SessionDep,
 ) -> Appointment:
-    await _ensure_refs_exist(session, body.employee_id, body.service_id)
+    await _ensure_refs_exist(
+        session, body.customer_id, body.employee_id, body.service_id
+    )
     _validate_slot_alignment(body.start_time, body.end_time)
     _validate_future_start_time(body.start_time)
 
@@ -182,6 +191,7 @@ async def update_appointment(
     payload = body.model_dump(exclude_unset=True)
     target_employee_id = payload.get("employee_id", appointment.employee_id)
     target_service_id = payload.get("service_id", appointment.service_id)
+    target_customer_id = payload.get("customer_id", appointment.customer_id)
     target_start_time = payload.get("start_time", appointment.start_time)
     target_end_time = payload.get("end_time", appointment.end_time)
     target_status = payload.get("status", AppointmentStatus(appointment.status))
@@ -189,7 +199,12 @@ async def update_appointment(
     _validate_time_window(target_start_time, target_end_time)
     _validate_slot_alignment(target_start_time, target_end_time)
     _validate_future_start_time(target_start_time)
-    await _ensure_refs_exist(session, target_employee_id, target_service_id)
+    await _ensure_refs_exist(
+        session,
+        target_customer_id,
+        target_employee_id,
+        target_service_id,
+    )
 
     if target_status != AppointmentStatus.CANCELLED:
         has_conflict = await _has_conflict(

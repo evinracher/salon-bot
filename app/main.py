@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.appointments import router as appointments_router
 from app.api.availability import router as availability_router
+from app.api.customers import router as customers_router
 from app.api.employee_services import router as employee_services_router
 from app.api.employees import router as employees_router
 from app.api.services import router as services_router
@@ -33,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(employees_router)
+app.include_router(customers_router)
 app.include_router(services_router)
 app.include_router(employee_services_router)
 app.include_router(appointments_router)

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -471,3 +471,154 @@ async def test_appointment_allows_adjacent_time_ranges(client: AsyncClient) -> N
         },
     )
     assert second.status_code == 201
+
+
+def _far_future_monday() -> date:
+    tz = ZoneInfo(settings.timezone)
+    d = datetime.now(tz).date() + timedelta(days=60)
+    return d - timedelta(days=d.weekday())
+
+
+def _local_appt_dt(day: date, hour: int, minute: int) -> datetime:
+    tz = ZoneInfo(settings.timezone)
+    return datetime.combine(day, time(hour, minute), tzinfo=tz)
+
+
+@pytest.mark.asyncio
+async def test_weekly_summary_empty_week(client: AsyncClient) -> None:
+    monday = _far_future_monday()
+    sunday = monday + timedelta(days=6)
+    resp = await client.get(
+        "/appointments/weekly-summary",
+        params={"week_start": monday.isoformat(), "week_end": sunday.isoformat()},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["week_start"] == monday.isoformat()
+    assert body["week_end"] == sunday.isoformat()
+    assert body["counts"] == {"total": 0, "completed": 0, "pending": 0}
+    assert body["most_requested_service"] is None
+    assert body["appointments_by_employee"] == []
+    assert body["upcoming_appointments"] == []
+
+
+@pytest.mark.asyncio
+async def test_weekly_summary_aggregates_and_upcoming(client: AsyncClient) -> None:
+    customer = await _create_customer(client, "ws1")
+    emp_alice = (
+        await client.post(
+            "/employees",
+            json={"name": "Alice", "phone": "+1-555-ws01"},
+        )
+    ).json()
+    emp_bob = (
+        await client.post(
+            "/employees",
+            json={"name": "Bob", "phone": "+1-555-ws02"},
+        )
+    ).json()
+    manicure = (
+        await client.post(
+            "/services",
+            json={"name": "Manicura", "duration_minutes": 30, "price": "20.00"},
+        )
+    ).json()
+    other = (
+        await client.post(
+            "/services",
+            json={"name": "Other", "duration_minutes": 30, "price": "10.00"},
+        )
+    ).json()
+
+    monday = _far_future_monday()
+    slots = [
+        (emp_alice["id"], manicure["id"], 10, 0),
+        (emp_alice["id"], manicure["id"], 10, 30),
+        (emp_bob["id"], manicure["id"], 11, 0),
+        (emp_bob["id"], other["id"], 15, 0),
+    ]
+    for emp_id, svc_id, h, m in slots:
+        start = _local_appt_dt(monday, h, m)
+        end = start + timedelta(minutes=30)
+        r = await client.post(
+            "/appointments",
+            json={
+                "customer_id": customer["id"],
+                "employee_id": emp_id,
+                "service_id": svc_id,
+                "start_time": _iso(start),
+                "end_time": _iso(end),
+                "status": "scheduled",
+            },
+        )
+        assert r.status_code == 201
+
+    sunday = monday + timedelta(days=6)
+    resp = await client.get(
+        "/appointments/weekly-summary",
+        params={
+            "week_start": monday.isoformat(),
+            "week_end": sunday.isoformat(),
+            "upcoming_on": monday.isoformat(),
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["counts"] == {"total": 4, "completed": 0, "pending": 4}
+    assert body["most_requested_service"] == {
+        "service_id": manicure["id"],
+        "name": "Manicura",
+        "appointments": 3,
+    }
+    by_emp = {
+        (row["employee_id"], row["name"], row["appointments"])
+        for row in body["appointments_by_employee"]
+    }
+    assert by_emp == {(emp_alice["id"], "Alice", 2), (emp_bob["id"], "Bob", 2)}
+
+    upcoming = body["upcoming_appointments"]
+    assert len(upcoming) == 4
+    assert [x["service_name"] for x in upcoming] == ["Manicura", "Manicura", "Manicura", "Other"]
+    assert upcoming[0]["employee_name"] == "Alice"
+
+
+@pytest.mark.asyncio
+async def test_weekly_summary_excludes_cancelled_from_counts(client: AsyncClient) -> None:
+    customer = await _create_customer(client, "ws2")
+    employee = await _create_employee(client, "ws2")
+    service = await _create_service(client, "ws2")
+    monday = _far_future_monday()
+    start = _local_appt_dt(monday, 12, 0)
+    end = start + timedelta(minutes=30)
+
+    created = (
+        await client.post(
+            "/appointments",
+            json={
+                "customer_id": customer["id"],
+                "employee_id": employee["id"],
+                "service_id": service["id"],
+                "start_time": _iso(start),
+                "end_time": _iso(end),
+                "status": "cancelled",
+            },
+        )
+    ).json()
+    assert created.get("id")
+
+    sunday = monday + timedelta(days=6)
+    resp = await client.get(
+        "/appointments/weekly-summary",
+        params={"week_start": monday.isoformat(), "week_end": sunday.isoformat()},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["counts"]["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_weekly_summary_rejects_inverted_range(client: AsyncClient) -> None:
+    resp = await client.get(
+        "/appointments/weekly-summary",
+        params={"week_start": "2030-06-10", "week_end": "2030-06-01"},
+    )
+    assert resp.status_code == 422

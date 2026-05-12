@@ -5,7 +5,6 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI
 
 from app.chat.agent.graph import graph_with_checkpointer
-from app.chat.api import customers_router
 from app.chat.api import router as chat_router
 from app.chat.whatsapp_api import whatsapp_router
 from app.chat.whatsapp_queue import shutdown_whatsapp, start_whatsapp_worker
@@ -38,6 +37,5 @@ async def chat_lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def register_chat_routers(app: FastAPI) -> None:
-    app.include_router(customers_router)
     app.include_router(chat_router)
     app.include_router(whatsapp_router)

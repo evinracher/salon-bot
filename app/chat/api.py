@@ -1,7 +1,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat.agent.runner import inject_manual_ai_message
@@ -11,8 +10,6 @@ from app.chat.schemas import (
     BotToggle,
     ChatPostResponse,
     ConversationRead,
-    CustomerCreate,
-    CustomerRead,
     ManualAIMessageCreate,
     MessageCreate,
 )
@@ -21,7 +18,6 @@ from app.chat.service import (
     set_bot_enabled,
 )
 from app.db import get_session
-from app.models.customer import Customer
 
 router = APIRouter(
     prefix="/chat",
@@ -29,8 +25,6 @@ router = APIRouter(
     dependencies=[Depends(ensure_chat_available)],
 )
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-
-customers_router = APIRouter(prefix="/customers", tags=["customers"])
 
 
 @router.post("/messages", response_model=ChatPostResponse)
@@ -77,23 +71,3 @@ async def manual_ai_message(
         conversation_id=conversation.id,
         content=body.content,
     )
-
-
-@customers_router.post("", response_model=CustomerRead, status_code=status.HTTP_201_CREATED)
-async def create_customer(body: CustomerCreate, session: SessionDep) -> Customer:
-    exists = await session.scalar(select(Customer.id).where(Customer.phone == body.phone))
-    if exists is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Customer phone already exists",
-        )
-    customer = Customer(name=body.name, phone=body.phone, notes=body.notes)
-    session.add(customer)
-    await session.commit()
-    await session.refresh(customer)
-    return customer
-
-
-@customers_router.get("", response_model=list[CustomerRead])
-async def list_customers(session: SessionDep) -> list[Customer]:
-    return list((await session.scalars(select(Customer).order_by(Customer.id))).all())

@@ -3,9 +3,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-current_session: ContextVar[AsyncSession | None] = ContextVar(
-    "chat_current_session", default=None
-)
+current_session: ContextVar[AsyncSession | None] = ContextVar("chat_current_session", default=None)
 
 pending_salon_state_patch: ContextVar[dict[str, Any] | None] = ContextVar(
     "pending_salon_state_patch", default=None

@@ -42,11 +42,7 @@ def extract_inbound_text_messages(body: dict[str, Any]) -> list[InboundTextMessa
             for c in value.get("contacts") or []:
                 wa = c.get("wa_id")
                 if isinstance(wa, str) and wa:
-                    profile = (
-                        (c.get("profile") or {})
-                        if isinstance(c.get("profile"), dict)
-                        else {}
-                    )
+                    profile = (c.get("profile") or {}) if isinstance(c.get("profile"), dict) else {}
                     name = profile.get("name")
                     contacts_by_wa[wa] = name if isinstance(name, str) else None
 

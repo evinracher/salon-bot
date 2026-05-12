@@ -108,9 +108,7 @@ async def _booking_has_overlap(
 async def list_employees() -> str:
     """List all employees and which services each can perform."""
     session = _get_session()
-    employees = list(
-        (await session.scalars(select(Employee).order_by(Employee.id))).all()
-    )
+    employees = list((await session.scalars(select(Employee).order_by(Employee.id))).all())
     rows = (
         await session.execute(
             select(EmployeeService.employee_id, Service.id, Service.name)
@@ -208,9 +206,7 @@ async def check_availability(
     id_list = sorted(employee_ids)
     names: dict[int, str] = {}
     if id_list:
-        for emp in (
-            await session.scalars(select(Employee).where(Employee.id.in_(id_list)))
-        ).all():
+        for emp in (await session.scalars(select(Employee).where(Employee.id.in_(id_list)))).all():
             names[emp.id] = emp.name
 
     payload: dict[str, Any] = {
@@ -350,9 +346,7 @@ async def cancel_appointment(appointment_id: int) -> str:
     appointment.status = AppointmentStatus.CANCELLED.value
     await session.commit()
     await session.refresh(appointment)
-    return _as_tool_str(
-        {"appointment_id": appointment.id, "status": appointment.status}
-    )
+    return _as_tool_str({"appointment_id": appointment.id, "status": appointment.status})
 
 
 ALL_TOOLS = [

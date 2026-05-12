@@ -42,9 +42,7 @@ async def test_bot_disabled_skips_agent_invoke(client: AsyncClient, fake_graph) 
 
 
 @pytest.mark.asyncio
-async def test_manual_ai_message_uses_update_state(
-    client: AsyncClient, fake_graph
-) -> None:
+async def test_manual_ai_message_uses_update_state(client: AsyncClient, fake_graph) -> None:
     created = await client.post(
         "/chat/messages",
         json={"phone": "+1-300-0003", "customer_name": "Owner", "content": "hello"},

@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-from fastapi import Request
 from langchain_core.messages import AIMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,9 +40,7 @@ async def test_run_turn_uses_conversation_id_as_thread_id() -> None:
     graph = DummyGraph()
     conversation = cast(Conversation, SimpleNamespace(id=42, customer_id=99))
     session = cast(AsyncSession, object())
-    reply = await run_turn(
-        cast(CompiledSalonAgent, graph), conversation, "hello", session=session
-    )
+    reply = await run_turn(cast(CompiledSalonAgent, graph), conversation, "hello", session=session)
     assert reply == "runner-ok"
     assert graph.last_invoke_config is not None
     assert graph.last_invoke_config["configurable"] == {"thread_id": "42"}
@@ -55,7 +52,6 @@ async def test_manual_injection_updates_state_thread_id() -> None:
     graph = DummyGraph()
     await inject_manual_ai_message(
         cast(CompiledSalonAgent, graph),
-        request=cast(Request, object()),
         conversation_id=7,
         content="manual",
     )
@@ -75,7 +71,7 @@ async def test_run_turn_system_prompt_includes_preference_names() -> None:
     conversation = cast(Conversation, SimpleNamespace(id=42, customer_id=99))
 
     class _Sess:
-        async def get(self, model, ident):  # noqa: ANN001
+        async def get(self, model, ident):
             if model is Service and ident == 10:
                 return SimpleNamespace(name="Color")
             if model is Employee and ident == 20:
@@ -83,9 +79,7 @@ async def test_run_turn_system_prompt_includes_preference_names() -> None:
             return None
 
     session = cast(AsyncSession, _Sess())
-    reply = await run_turn(
-        cast(CompiledSalonAgent, graph), conversation, "hello", session=session
-    )
+    reply = await run_turn(cast(CompiledSalonAgent, graph), conversation, "hello", session=session)
     assert reply == "runner-ok"
     assert graph.last_invoke_values is not None
     msgs = graph.last_invoke_values["messages"]

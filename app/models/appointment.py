@@ -9,9 +9,7 @@ from app.db import Base
 class Appointment(Base):
     __tablename__ = "appointments"
     __table_args__ = (
-        CheckConstraint(
-            "end_time > start_time", name="ck_appointments_end_after_start"
-        ),
+        CheckConstraint("end_time > start_time", name="ck_appointments_end_after_start"),
         CheckConstraint(
             "status IN ('scheduled','confirmed','completed','cancelled','no_show')",
             name="ck_appointments_status_valid",

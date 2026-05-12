@@ -9,8 +9,8 @@ from app.config import settings
 from app.models.appointment import Appointment
 from app.models.employee_service import EmployeeService
 from app.models.service import Service
-from app.schemas.availability import AvailabilitySlot
 from app.schemas.appointment import AppointmentStatus
+from app.schemas.availability import AvailabilitySlot
 from app.services.availability import (
     build_business_window,
     generate_candidate_slots,
@@ -68,9 +68,7 @@ async def compute_availability_slots(
         return []
 
     result = await session.execute(
-        select(
-            Appointment.employee_id, Appointment.start_time, Appointment.end_time
-        ).where(
+        select(Appointment.employee_id, Appointment.start_time, Appointment.end_time).where(
             Appointment.employee_id.in_(employee_ids),
             Appointment.status != AppointmentStatus.CANCELLED.value,
             Appointment.start_time < close_dt,
@@ -116,7 +114,5 @@ async def resolve_service_duration_minutes(
     service = await session.get(Service, service_id)
     if service is None:
         return None, 0
-    selected = (
-        duration_minutes if duration_minutes is not None else service.duration_minutes
-    )
+    selected = duration_minutes if duration_minutes is not None else service.duration_minutes
     return service, selected

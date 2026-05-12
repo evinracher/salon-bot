@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse, Response
@@ -13,6 +17,29 @@ from app.config import settings
 logger = structlog.get_logger(__name__)
 
 whatsapp_router = APIRouter(prefix="/webhooks", tags=["whatsapp"])
+
+
+def _verify_meta_app_signature(*, raw_body: bytes, signature_header: str | None) -> None:
+    """Raise HTTPException 403 if secret is set and signature is missing or invalid."""
+    secret = settings.whatsapp_app_secret.strip()
+    if not secret:
+        return
+    if not signature_header:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing X-Hub-Signature-256",
+        )
+    expected = hmac.new(
+        secret.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    expected_header = f"sha256={expected}"
+    if not hmac.compare_digest(signature_header, expected_header):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid webhook signature",
+        )
 
 
 @whatsapp_router.get("/whatsapp")
@@ -52,9 +79,15 @@ async def receive_whatsapp_webhook(request: Request) -> Response:
 
     Meta retries on non-2xx; failures after enqueue should not trigger retries.
     """
+    raw_body = await request.body()
+    _verify_meta_app_signature(
+        raw_body=raw_body,
+        signature_header=request.headers.get("X-Hub-Signature-256"),
+    )
+
     try:
-        body = await request.json()
-    except Exception:
+        body = json.loads(raw_body)
+    except json.JSONDecodeError:
         logger.warning("whatsapp_webhook_invalid_json")
         return Response(status_code=status.HTTP_200_OK)
 

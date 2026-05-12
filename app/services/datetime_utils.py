@@ -27,7 +27,7 @@ def is_slot_boundary_in_timezone(
     interval_minutes: int,
     timezone_name: str,
 ) -> bool:
-    local_value = value.astimezone(ZoneInfo(timezone_name))
+    local_value = ensure_aware_in_timezone(value, timezone_name)
     return (
         local_value.minute % interval_minutes == 0
         and local_value.second == 0
@@ -46,4 +46,5 @@ def is_slot_duration_aligned(
 
 
 def normalize_to_second_in_timezone(value: datetime, timezone_name: str) -> datetime:
-    return value.astimezone(ZoneInfo(timezone_name)).replace(microsecond=0)
+    aware = ensure_aware_in_timezone(value, timezone_name)
+    return aware.astimezone(ZoneInfo(timezone_name)).replace(microsecond=0)

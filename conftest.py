@@ -14,8 +14,6 @@ if not _test_url:
     raise RuntimeError(msg)
 
 _effective_test_url = _test_url
-assert "test" in _effective_test_url.lower(), (
-    "refusing to run tests against non-test DB"
-)
+assert "test" in _effective_test_url.lower(), "refusing to run tests against non-test DB"
 
 os.environ["DATABASE_URL"] = _effective_test_url

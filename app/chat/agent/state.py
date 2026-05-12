@@ -1,9 +1,8 @@
-from typing import Any
+from typing import Annotated, Any, NotRequired
 
 from langchain.agents import AgentState
 from langchain.agents.middleware.types import OmitFromInput
 from langgraph.managed import RemainingSteps
-from typing_extensions import Annotated, NotRequired
 
 
 class SalonState(AgentState[Any]):

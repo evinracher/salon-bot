@@ -33,9 +33,7 @@ async def get_availability(
         duration_minutes=duration_minutes,
     )
     if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Service not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
 
     if (
         selected_duration_minutes <= 0
@@ -49,9 +47,7 @@ async def get_availability(
     if employee_id is not None:
         employee = await session.get(Employee, employee_id)
         if employee is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
         relation = await session.scalar(
             select(EmployeeService.id).where(
                 EmployeeService.employee_id == employee_id,

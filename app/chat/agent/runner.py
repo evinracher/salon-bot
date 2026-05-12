@@ -2,12 +2,11 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import Request
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.chat.agent.protocols import CompiledSalonAgent
 from app.chat.agent.prompts import salon_system_prompt
+from app.chat.agent.protocols import CompiledSalonAgent
 from app.chat.agent.runtime import current_session, pending_salon_state_patch
 from app.chat.models.conversation import Conversation
 from app.config import settings
@@ -22,9 +21,7 @@ def _thread_config(conversation_id: int) -> dict:
     }
 
 
-async def _checkpoint_preference_ids(
-    graph: CompiledSalonAgent, config: dict
-) -> tuple[Any, Any]:
+async def _checkpoint_preference_ids(graph: CompiledSalonAgent, config: dict) -> tuple[Any, Any]:
     try:
         snap = await graph.aget_state(config)
     except Exception:
@@ -98,11 +95,9 @@ async def run_turn(
 
 async def inject_manual_ai_message(
     graph: CompiledSalonAgent,
-    request: Request,
     conversation_id: int,
     content: str,
 ) -> None:
-    _ = request
     await graph.aupdate_state(
         config=_thread_config(conversation_id),
         values={"messages": [AIMessage(content=content)]},

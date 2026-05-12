@@ -36,19 +36,13 @@ async def _ensure_refs_exist(
 ) -> None:
     customer = await session.get(Customer, customer_id)
     if customer is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
     employee = await session.get(Employee, employee_id)
     if employee is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
     service = await session.get(Service, service_id)
     if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Service not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
 
 
 async def _has_conflict(
@@ -78,9 +72,7 @@ def _validate_time_window(start_time: datetime, end_time: datetime) -> None:
 
 
 def _validate_future_start_time(start_time: datetime) -> None:
-    if not is_future_in_reference_tz(
-        start_time, reference_timezone_name=settings.timezone
-    ):
+    if not is_future_in_reference_tz(start_time, reference_timezone_name=settings.timezone):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="start_time must be in the future",
@@ -127,9 +119,7 @@ async def create_appointment(
             "end_time": ensure_aware_in_timezone(body.end_time, settings.timezone),
         }
     )
-    await _ensure_refs_exist(
-        session, body.customer_id, body.employee_id, body.service_id
-    )
+    await _ensure_refs_exist(session, body.customer_id, body.employee_id, body.service_id)
     _validate_slot_alignment(body.start_time, body.end_time)
     _validate_future_start_time(body.start_time)
 
@@ -169,13 +159,13 @@ async def list_appointments(
     if status_filter is not None:
         stmt = stmt.where(Appointment.status == status_filter.value)
     if from_time is not None:
-        stmt = stmt.where(Appointment.start_time >= from_time)
+        from_bound = ensure_aware_in_timezone(from_time, settings.timezone)
+        stmt = stmt.where(Appointment.start_time >= from_bound)
     if to_time is not None:
-        stmt = stmt.where(Appointment.start_time <= to_time)
+        to_bound = ensure_aware_in_timezone(to_time, settings.timezone)
+        stmt = stmt.where(Appointment.start_time <= to_bound)
 
-    result = await session.scalars(
-        stmt.order_by(Appointment.start_time, Appointment.id)
-    )
+    result = await session.scalars(stmt.order_by(Appointment.start_time, Appointment.id))
     return list(result.all())
 
 

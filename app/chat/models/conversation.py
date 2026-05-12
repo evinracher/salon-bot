@@ -14,9 +14,7 @@ class Conversation(Base):
         ForeignKey("customers.id", ondelete="CASCADE"),
         unique=True,
     )
-    bot_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default="true"
-    )
+    bot_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

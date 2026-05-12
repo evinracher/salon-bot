@@ -1,7 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
+
+from app.config import settings
 
 
 async def _create_employee(client: AsyncClient, suffix: str) -> dict:
@@ -36,7 +39,7 @@ def _iso(value: datetime) -> str:
 
 
 def _next_aligned_utc(minutes_ahead: int = 30) -> datetime:
-    base = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    base = datetime.now(UTC).replace(second=0, microsecond=0)
     remainder = base.minute % 30
     aligned = base if remainder == 0 else base + timedelta(minutes=30 - remainder)
     return aligned + timedelta(minutes=minutes_ahead)
@@ -93,7 +96,7 @@ async def test_appointment_invalid_time_returns_422(client: AsyncClient) -> None
     customer = await _create_customer(client, "12")
     employee = await _create_employee(client, "12")
     service = await _create_service(client, "12")
-    start = datetime.now(timezone.utc).replace(microsecond=0)
+    start = datetime.now(UTC).replace(microsecond=0)
     end = start
 
     resp = await client.post(
@@ -298,9 +301,7 @@ async def test_appointment_patch_rejects_past_start_time(client: AsyncClient) ->
         )
     ).json()
 
-    past_start = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(
-        minutes=15
-    )
+    past_start = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=15)
     patch_resp = await client.patch(
         f"/appointments/{created['id']}",
         json={
@@ -365,7 +366,13 @@ async def test_appointment_list_filters_and_delete(client: AsyncClient) -> None:
     ).json()
 
     filtered = await client.get(
-        f"/appointments?employee_id={employee['id']}&status=confirmed&from={_iso(start - timedelta(minutes=1))}&to={_iso(start + timedelta(minutes=1))}",
+        "/appointments",
+        params={
+            "employee_id": employee["id"],
+            "status": "confirmed",
+            "from": _iso(start - timedelta(minutes=1)),
+            "to": _iso(start + timedelta(minutes=1)),
+        },
     )
     assert filtered.status_code == 200
     assert any(item["id"] == created["id"] for item in filtered.json())
@@ -373,6 +380,61 @@ async def test_appointment_list_filters_and_delete(client: AsyncClient) -> None:
     delete_resp = await client.delete(f"/appointments/{created['id']}")
     assert delete_resp.status_code == 204
     assert (await client.get(f"/appointments/{created['id']}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_appointment_list_naive_from_to_matches_aware_bounds(
+    client: AsyncClient,
+) -> None:
+    """Naive ISO bounds are interpreted as salon wall clock (settings.timezone)."""
+    customer = await _create_customer(client, "naivef")
+    employee = await _create_employee(client, "naivef")
+    service = await _create_service(client, "naivef")
+    start = _next_aligned_utc()
+
+    created = (
+        await client.post(
+            "/appointments",
+            json={
+                "customer_id": customer["id"],
+                "employee_id": employee["id"],
+                "service_id": service["id"],
+                "start_time": _iso(start),
+                "end_time": _iso(start + timedelta(minutes=30)),
+                "status": "confirmed",
+            },
+        )
+    ).json()
+
+    tz = ZoneInfo(settings.timezone)
+    local_start = start.astimezone(tz)
+    from_naive = (local_start - timedelta(minutes=1)).replace(tzinfo=None)
+    to_naive = (local_start + timedelta(minutes=1)).replace(tzinfo=None)
+
+    naive_resp = await client.get(
+        "/appointments",
+        params={
+            "employee_id": employee["id"],
+            "status": "confirmed",
+            "from": from_naive.isoformat(),
+            "to": to_naive.isoformat(),
+        },
+    )
+    aware_resp = await client.get(
+        "/appointments",
+        params={
+            "employee_id": employee["id"],
+            "status": "confirmed",
+            "from": _iso(start - timedelta(minutes=1)),
+            "to": _iso(start + timedelta(minutes=1)),
+        },
+    )
+    assert naive_resp.status_code == 200
+    assert aware_resp.status_code == 200
+    naive_ids = {row["id"] for row in naive_resp.json()}
+    aware_ids = {row["id"] for row in aware_resp.json()}
+    assert naive_ids == aware_ids
+    assert created["id"] in naive_ids
 
 
 @pytest.mark.asyncio

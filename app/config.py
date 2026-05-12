@@ -1,4 +1,5 @@
 from datetime import time
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -71,6 +72,13 @@ class Settings(BaseSettings):
         description="WhatsApp phone number ID from Meta app dashboard",
     )
     whatsapp_graph_api_version: str = "v21.0"
+    whatsapp_app_secret: str = Field(
+        default="",
+        description=(
+            "Meta app secret for webhook HMAC (X-Hub-Signature-256). "
+            "When empty, signature verification is skipped (dev only)."
+        ),
+    )
 
     @field_validator("groq_api_key", "openai_api_key", mode="before")
     @classmethod
@@ -112,11 +120,15 @@ class Settings(BaseSettings):
             raise ValueError("business_close_time must be after business_open_time")
         if not self.parse_business_days(self.business_days):
             raise ValueError("business_days must not be empty")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            msg = f"Invalid IANA timezone in TIMEZONE: {self.timezone!r}"
+            raise ValueError(msg) from exc
         provider = (self.chat_llm_provider or "").strip().lower()
         if provider not in ("groq", "openai"):
             raise ValueError(
-                "chat_llm_provider must be 'groq' or 'openai', "
-                f"got {self.chat_llm_provider!r}",
+                f"chat_llm_provider must be 'groq' or 'openai', got {self.chat_llm_provider!r}",
             )
         self.chat_llm_provider = provider
         return self

@@ -100,7 +100,9 @@ async def enqueue_whatsapp_inbound(
     }
     opts: dict[str, object] = {
         "attempts": settings.whatsapp_job_attempts,
-        "removeOnComplete": True,
+        "backoff": {"type": "exponential", "delay": 1000},
+        "removeOnComplete": {"age": 3600, "count": 1000},
+        "removeOnFail": {"age": 86400, "count": 1000},
         "jobId": f"wa-{message_id}",
     }
     try:

@@ -44,9 +44,7 @@ async def get_or_create_conversation_by_phone(
     return conversation
 
 
-async def get_conversation(
-    session: AsyncSession, conversation_id: int
-) -> Conversation | None:
+async def get_conversation(session: AsyncSession, conversation_id: int) -> Conversation | None:
     return await session.get(Conversation, conversation_id)
 
 

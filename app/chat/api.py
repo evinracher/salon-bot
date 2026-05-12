@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,13 +62,10 @@ async def toggle_bot(
     return ConversationRead.model_validate(conversation)
 
 
-@router.post(
-    "/conversations/{conversation_id}/manual-ai", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.post("/conversations/{conversation_id}/manual-ai", status_code=status.HTTP_204_NO_CONTENT)
 async def manual_ai_message(
     conversation_id: int,
     body: ManualAIMessageCreate,
-    request: Request,
     session: SessionDep,
     graph=Depends(get_compiled_graph),
 ) -> None:
@@ -77,19 +74,14 @@ async def manual_ai_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await inject_manual_ai_message(
         graph=graph,
-        request=request,
         conversation_id=conversation.id,
         content=body.content,
     )
 
 
-@customers_router.post(
-    "", response_model=CustomerRead, status_code=status.HTTP_201_CREATED
-)
+@customers_router.post("", response_model=CustomerRead, status_code=status.HTTP_201_CREATED)
 async def create_customer(body: CustomerCreate, session: SessionDep) -> Customer:
-    exists = await session.scalar(
-        select(Customer.id).where(Customer.phone == body.phone)
-    )
+    exists = await session.scalar(select(Customer.id).where(Customer.phone == body.phone))
     if exists is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

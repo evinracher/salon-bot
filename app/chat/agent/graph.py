@@ -45,9 +45,7 @@ def _build_groq_chat_model() -> BaseChatModel:
     if not names:
         return primary
 
-    fallbacks = [
-        ChatGroq(api_key=api_key, model_name=name, temperature=0) for name in names
-    ]
+    fallbacks = [ChatGroq(api_key=api_key, model_name=name, temperature=0) for name in names]
     return cast(
         BaseChatModel,
         primary.with_fallbacks(
@@ -73,10 +71,7 @@ def build_chat_model() -> BaseChatModel:
         return _build_openai_chat_model()
     if provider == "groq":
         return _build_groq_chat_model()
-    msg = (
-        f"Unsupported chat_llm_provider={settings.chat_llm_provider!r}; "
-        "use 'groq' or 'openai'"
-    )
+    msg = f"Unsupported chat_llm_provider={settings.chat_llm_provider!r}; use 'groq' or 'openai'"
     raise ValueError(msg)
 
 
@@ -92,10 +87,7 @@ class SanitizeToolMessagesMiddleware(AgentMiddleware[AgentState[Any], None, Any]
         handler: Callable[[ModelRequest[None]], Awaitable[ModelResponse[Any]]],
     ) -> ModelResponse[Any] | AIMessage:
         raw: list[AnyMessage] = list(request.state.get("messages") or [])
-        fixed = [
-            _coerce_tool_message_content(m) if isinstance(m, ToolMessage) else m
-            for m in raw
-        ]
+        fixed = [_coerce_tool_message_content(m) if isinstance(m, ToolMessage) else m for m in raw]
         fixed = ensure_tool_call_responses(fixed)
         return await handler(request.override(messages=fixed))
 
@@ -142,9 +134,7 @@ def _langgraph_postgres_conn_string(database_url: str) -> str:
 
 
 @asynccontextmanager
-async def graph_with_checkpointer() -> AsyncIterator[
-    tuple[CompiledSalonAgent, AsyncPostgresSaver]
-]:
+async def graph_with_checkpointer() -> AsyncIterator[tuple[CompiledSalonAgent, AsyncPostgresSaver]]:
     conn_string = _langgraph_postgres_conn_string(settings.database_url)
     async with AsyncPostgresSaver.from_conn_string(conn_string) as checkpointer:
         await checkpointer.setup()

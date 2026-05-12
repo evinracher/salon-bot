@@ -50,7 +50,5 @@ async def test_service_validation(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_service_missing_returns_404(client: AsyncClient) -> None:
     assert (await client.get("/services/999999999")).status_code == 404
-    assert (
-        await client.patch("/services/999999999", json={"name": "X"})
-    ).status_code == 404
+    assert (await client.patch("/services/999999999", json={"name": "X"})).status_code == 404
     assert (await client.delete("/services/999999999")).status_code == 404

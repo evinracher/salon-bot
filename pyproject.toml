@@ -47,6 +47,42 @@ python_version = "3.12"
 plugins = ["pydantic.mypy"]
 mypy_path = ["typings"]
 
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["typings"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S", "PL", "PT"]
+ignore = [
+    "S101",
+    "PLR0913",
+    "B008",
+    "PLW2901",
+    "PLR2004",
+    "UP042",
+    "S104",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR2004", "PLC0415"]
+"alembic/versions/*" = ["E501", "I001"]
+"app/chat/agent/prompts.py" = ["E501"]
+"app/chat/agent/tools.py" = ["E501"]
+"app/chat/__init__.py" = ["E501"]
+"app/chat/agent/message_repair.py" = ["E501"]
+"alembic/env.py" = ["I001"]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+omit = ["app/chat/agent/protocols.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 70
+
 [dependency-groups]
 dev = [
     "mypy>=2.0.0",

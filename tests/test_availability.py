@@ -1,5 +1,5 @@
-from httpx import AsyncClient
 import pytest
+from httpx import AsyncClient
 
 
 async def _create_employee(client: AsyncClient, suffix: str) -> dict:
@@ -33,9 +33,7 @@ async def _create_customer(client: AsyncClient, suffix: str) -> dict:
     ).json()
 
 
-async def _link_employee_service(
-    client: AsyncClient, employee_id: int, service_id: int
-) -> None:
+async def _link_employee_service(client: AsyncClient, employee_id: int, service_id: int) -> None:
     response = await client.post(
         "/employee-services",
         json={"employee_id": employee_id, "service_id": service_id},
@@ -64,17 +62,13 @@ async def test_availability_service_day_returns_expected_slot_counts(
     await _link_employee_service(client, employee["id"], service_30["id"])
     await _link_employee_service(client, employee["id"], service_90["id"])
 
-    resp_30 = await client.get(
-        f"/availability?service_id={service_30['id']}&date=2026-05-11"
-    )
+    resp_30 = await client.get(f"/availability?service_id={service_30['id']}&date=2026-05-11")
     assert resp_30.status_code == 200
     body_30 = resp_30.json()
     assert len(body_30["slots"]) == 18
     assert body_30["slots"][0]["employee_ids"] == [employee["id"]]
 
-    resp_90 = await client.get(
-        f"/availability?service_id={service_90['id']}&date=2026-05-11"
-    )
+    resp_90 = await client.get(f"/availability?service_id={service_90['id']}&date=2026-05-11")
     assert resp_90.status_code == 200
     body_90 = resp_90.json()
     assert len(body_90["slots"]) == 16
@@ -136,9 +130,7 @@ async def test_availability_employee_filter_and_union_behavior(
     employee_slots = _slot_starts(employee_resp.json())
     assert "2030-06-03T10:00:00-05:00" not in employee_slots
 
-    union_resp = await client.get(
-        f"/availability?service_id={service['id']}&date=2030-06-03"
-    )
+    union_resp = await client.get(f"/availability?service_id={service['id']}&date=2030-06-03")
     assert union_resp.status_code == 200
     union_body = union_resp.json()
     union_slots = _slot_starts(union_body)
@@ -192,9 +184,7 @@ async def test_availability_cancelled_appointment_does_not_block(
 
 @pytest.mark.asyncio
 async def test_availability_unknown_ids_return_404(client: AsyncClient) -> None:
-    missing_service = await client.get(
-        "/availability?service_id=999999&date=2026-05-11"
-    )
+    missing_service = await client.get("/availability?service_id=999999&date=2026-05-11")
     assert missing_service.status_code == 404
 
     service = await _create_service(client, "a9", duration=30)

@@ -4,10 +4,12 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
-logger = logging.getLogger(__name__)
-
 from app.chat.agent.graph import graph_with_checkpointer
 from app.chat.api import customers_router, router as chat_router
+from app.chat.whatsapp_api import whatsapp_router
+from app.chat.whatsapp_queue import shutdown_whatsapp, start_whatsapp_worker
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -25,10 +27,16 @@ async def chat_lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         app.state.chat_init_error = str(exc)
         logger.exception("chat_runtime_init_failed")
-    yield
-    await stack.aclose()
+
+    await start_whatsapp_worker(app)
+    try:
+        yield
+    finally:
+        await shutdown_whatsapp(app)
+        await stack.aclose()
 
 
 def register_chat_routers(app: FastAPI) -> None:
     app.include_router(customers_router)
     app.include_router(chat_router)
+    app.include_router(whatsapp_router)

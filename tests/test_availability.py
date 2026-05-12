@@ -122,28 +122,28 @@ async def test_availability_employee_filter_and_union_behavior(
             "customer_id": customer["id"],
             "employee_id": employee_1["id"],
             "service_id": service["id"],
-            "start_time": "2026-05-11T10:00:00-05:00",
-            "end_time": "2026-05-11T10:30:00-05:00",
+            "start_time": "2030-06-03T10:00:00-05:00",
+            "end_time": "2030-06-03T10:30:00-05:00",
             "status": "scheduled",
         },
     )
     assert appointment.status_code == 201
 
     employee_resp = await client.get(
-        f"/availability?service_id={service['id']}&employee_id={employee_1['id']}&date=2026-05-11"
+        f"/availability?service_id={service['id']}&employee_id={employee_1['id']}&date=2030-06-03"
     )
     assert employee_resp.status_code == 200
     employee_slots = _slot_starts(employee_resp.json())
-    assert "2026-05-11T10:00:00-05:00" not in employee_slots
+    assert "2030-06-03T10:00:00-05:00" not in employee_slots
 
     union_resp = await client.get(
-        f"/availability?service_id={service['id']}&date=2026-05-11"
+        f"/availability?service_id={service['id']}&date=2030-06-03"
     )
     assert union_resp.status_code == 200
     union_body = union_resp.json()
     union_slots = _slot_starts(union_body)
-    assert "2026-05-11T10:00:00-05:00" in union_slots
-    assert _slot_by_start(union_body, "2026-05-11T10:00:00-05:00")["employee_ids"] == [
+    assert "2030-06-03T10:00:00-05:00" in union_slots
+    assert _slot_by_start(union_body, "2030-06-03T10:00:00-05:00")["employee_ids"] == [
         employee_2["id"]
     ]
 
@@ -176,18 +176,18 @@ async def test_availability_cancelled_appointment_does_not_block(
             "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "start_time": "2026-05-11T10:00:00-05:00",
-            "end_time": "2026-05-11T10:30:00-05:00",
+            "start_time": "2030-06-03T10:00:00-05:00",
+            "end_time": "2030-06-03T10:30:00-05:00",
             "status": "cancelled",
         },
     )
     assert cancelled.status_code == 201
 
     resp = await client.get(
-        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2026-05-11"
+        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2030-06-03"
     )
     assert resp.status_code == 200
-    assert "2026-05-11T10:00:00-05:00" in _slot_starts(resp.json())
+    assert "2030-06-03T10:00:00-05:00" in _slot_starts(resp.json())
 
 
 @pytest.mark.asyncio
@@ -239,20 +239,20 @@ async def test_availability_restarts_exactly_at_appointment_end(
             "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "start_time": "2026-05-11T11:00:00-05:00",
-            "end_time": "2026-05-11T11:30:00-05:00",
+            "start_time": "2030-06-03T11:00:00-05:00",
+            "end_time": "2030-06-03T11:30:00-05:00",
             "status": "scheduled",
         },
     )
     assert existing.status_code == 201
 
     resp = await client.get(
-        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2026-05-11"
+        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2030-06-03"
     )
     assert resp.status_code == 200
     starts = _slot_starts(resp.json())
-    assert "2026-05-11T11:00:00-05:00" not in starts
-    assert "2026-05-11T11:30:00-05:00" in starts
+    assert "2030-06-03T11:00:00-05:00" not in starts
+    assert "2030-06-03T11:30:00-05:00" in starts
 
 
 @pytest.mark.asyncio

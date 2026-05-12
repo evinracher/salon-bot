@@ -13,4 +13,5 @@ class SalonState(AgentState[Any]):
     flow: NotRequired[str | None]
     employee_id: NotRequired[int | None]
     service_id: NotRequired[int | None]
+    preferred_service_id: NotRequired[int | None]
     preferred_employee_id: NotRequired[int | None]

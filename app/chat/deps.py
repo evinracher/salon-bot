@@ -1,4 +1,8 @@
+from typing import cast
+
 from fastapi import Depends, HTTPException, Request, status
+
+from app.chat.agent.protocols import CompiledSalonAgent
 
 
 def ensure_chat_available(request: Request) -> None:
@@ -15,11 +19,13 @@ def ensure_chat_available(request: Request) -> None:
         )
 
 
-def get_compiled_graph(request: Request, _: None = Depends(ensure_chat_available)):
+def get_compiled_graph(
+    request: Request, _: None = Depends(ensure_chat_available)
+) -> CompiledSalonAgent:
     graph = request.app.state.chat_graph
     if graph is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Chat graph is not initialized",
         )
-    return graph
+    return cast(CompiledSalonAgent, graph)

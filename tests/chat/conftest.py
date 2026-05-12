@@ -11,6 +11,13 @@ class FakeGraph:
     def __init__(self) -> None:
         self.invocations: list[dict] = []
         self.updated_states: list[dict] = []
+        self.state_values: dict = {}
+
+    async def aget_state(self, config: dict) -> object:
+        _ = config
+        from types import SimpleNamespace
+
+        return SimpleNamespace(values=dict(self.state_values))
 
     async def ainvoke(self, values: dict, config: dict) -> dict:
         self.invocations.append({"values": values, "config": config})

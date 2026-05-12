@@ -1,45 +1,132 @@
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
+import groq
+from langchain.agents import AgentState, create_agent
+from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, AnyMessage, ToolMessage
+from langchain_core.tools import BaseTool
 from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.prebuilt.tool_node import ToolCallRequest
+from langgraph.types import Command
 from pydantic import SecretStr
 
+from app.chat.agent.message_repair import ensure_tool_call_responses
+from app.chat.agent.protocols import CompiledSalonAgent
 from app.chat.agent.state import SalonState
 from app.chat.agent.tools import ALL_TOOLS
 from app.config import settings
 
 
-@wrap_model_call(state_schema=SalonState) 
-async def _groq_safe_messages_middleware(
-    request: ModelRequest[None],
-    handler: Callable[[ModelRequest[None]], Awaitable[ModelResponse[Any]]],
-) -> ModelResponse[Any] | AIMessage:
-    """Groq rejects tool messages whose content is not a non-empty string (e.g. []).
-    Normalize only the message list passed to the model; checkpointed state is unchanged.
-    """
-    raw: list[AnyMessage] = list(request.state.get("messages") or [])
-    fixed: list[AnyMessage] = []
-    for m in raw:
-        if isinstance(m, ToolMessage):
-            c = m.content
-            if isinstance(c, str):
-                if len(c) == 0:
-                    fixed.append(m.model_copy(update={"content": "{}"}))
-                else:
-                    fixed.append(m)
-            else:
-                fixed.append(
-                    m.model_copy(update={"content": json.dumps(c, default=str)})
-                )
-        else:
-            fixed.append(m)
-    return await handler(request.override(messages=fixed))
+def _coerce_tool_message_content(msg: ToolMessage) -> ToolMessage:
+    """Groq rejects empty tool strings; non-strings must be JSON text."""
+    c = msg.content
+    if isinstance(c, str) and not c:
+        return msg.model_copy(update={"content": "{}"})
+    if isinstance(c, str):
+        return msg
+    return msg.model_copy(update={"content": json.dumps(c, default=str)})
+
+
+def _build_groq_chat_model() -> BaseChatModel:
+    """Primary ChatGroq plus optional fallbacks when Groq returns rate limits (429)."""
+    api_key = SecretStr(settings.groq_api_key) if settings.groq_api_key else None
+    primary = ChatGroq(
+        api_key=api_key,
+        model_name=settings.groq_model,
+        temperature=0,
+    )
+    names = settings.groq_fallback_model_names
+    if not names:
+        return primary
+
+    fallbacks = [
+        ChatGroq(api_key=api_key, model_name=name, temperature=0) for name in names
+    ]
+    return cast(
+        BaseChatModel,
+        primary.with_fallbacks(
+            fallbacks,
+            exceptions_to_handle=(groq.RateLimitError,),
+        ),
+    )
+
+
+def _build_openai_chat_model() -> BaseChatModel:
+    api_key = SecretStr(settings.openai_api_key) if settings.openai_api_key else None
+    return ChatOpenAI(
+        api_key=api_key,
+        model=settings.openai_model,
+        temperature=0,
+    )
+
+
+def build_chat_model() -> BaseChatModel:
+    """Chat model for the agent: Groq or OpenAI, from ``settings.chat_llm_provider``."""
+    provider = (settings.chat_llm_provider or "groq").strip().lower()
+    if provider == "openai":
+        return _build_openai_chat_model()
+    if provider == "groq":
+        return _build_groq_chat_model()
+    msg = (
+        f"Unsupported chat_llm_provider={settings.chat_llm_provider!r}; "
+        "use 'groq' or 'openai'"
+    )
+    raise ValueError(msg)
+
+
+class SanitizeToolMessagesMiddleware(AgentMiddleware[AgentState[Any], None, Any]):
+    """Normalize tool payloads; pad missing tool replies (OpenAI requires every call id)."""
+
+    state_schema = SalonState
+    tools: Sequence[BaseTool] = ()
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest[None],
+        handler: Callable[[ModelRequest[None]], Awaitable[ModelResponse[Any]]],
+    ) -> ModelResponse[Any] | AIMessage:
+        raw: list[AnyMessage] = list(request.state.get("messages") or [])
+        fixed = [
+            _coerce_tool_message_content(m) if isinstance(m, ToolMessage) else m
+            for m in raw
+        ]
+        fixed = ensure_tool_call_responses(fixed)
+        return await handler(request.override(messages=fixed))
+
+
+class SafeToolErrorResponseMiddleware(AgentMiddleware):
+    """Return structured JSON tool errors instead of failing the whole turn."""
+
+    tools: Sequence[BaseTool] = ()
+
+    async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
+    ) -> ToolMessage | Command[Any]:
+        try:
+            return await handler(request)
+        except Exception as exc:
+            tool_call_id = request.tool_call.get("id", "")
+            tool_name = request.tool_call.get("name", "")
+            error_payload = {
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                }
+            }
+            return ToolMessage(
+                content=json.dumps(error_payload, default=str),
+                name=tool_name,
+                tool_call_id=tool_call_id,
+                status="error",
+            )
 
 
 def _langgraph_postgres_conn_string(database_url: str) -> str:
@@ -55,20 +142,21 @@ def _langgraph_postgres_conn_string(database_url: str) -> str:
 
 
 @asynccontextmanager
-async def graph_with_checkpointer() -> AsyncIterator[tuple[object, AsyncPostgresSaver]]:
+async def graph_with_checkpointer() -> AsyncIterator[
+    tuple[CompiledSalonAgent, AsyncPostgresSaver]
+]:
     conn_string = _langgraph_postgres_conn_string(settings.database_url)
     async with AsyncPostgresSaver.from_conn_string(conn_string) as checkpointer:
         await checkpointer.setup()
-        model = ChatGroq(
-            api_key=SecretStr(settings.groq_api_key) if settings.groq_api_key else None,
-            model_name=settings.groq_model,
-            temperature=0,
-        )
+        model = build_chat_model()
         graph = create_agent(
             model=model,
             tools=ALL_TOOLS,
             state_schema=SalonState,
             checkpointer=checkpointer,
-            middleware=[_groq_safe_messages_middleware],
+            middleware=[
+                SanitizeToolMessagesMiddleware(),
+                SafeToolErrorResponseMiddleware(),
+            ],
         )
-        yield graph, checkpointer
+        yield cast(CompiledSalonAgent, graph), checkpointer

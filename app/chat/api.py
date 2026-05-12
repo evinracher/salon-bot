@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.chat.agent.runner import inject_manual_ai_message, run_turn
+from app.chat.agent.runner import inject_manual_ai_message
 from app.chat.deps import ensure_chat_available, get_compiled_graph
+from app.chat.orchestration import process_inbound_chat_turn
 from app.chat.schemas import (
     BotToggle,
     ChatPostResponse,
@@ -17,7 +18,6 @@ from app.chat.schemas import (
 )
 from app.chat.service import (
     get_conversation,
-    get_or_create_conversation_by_phone,
     set_bot_enabled,
 )
 from app.db import get_session
@@ -39,22 +39,15 @@ async def post_message(
     session: SessionDep,
     graph=Depends(get_compiled_graph),
 ) -> ChatPostResponse:
-    conversation = await get_or_create_conversation_by_phone(
+    turn = await process_inbound_chat_turn(
+        graph=graph,
         session=session,
         phone=body.phone,
+        content=body.content,
         customer_name=body.customer_name,
     )
-    conversation_read = ConversationRead.model_validate(conversation)
-    if not conversation.bot_enabled:
-        return ChatPostResponse(conversation=conversation_read, bot_reply=None)
-
-    bot_reply = await run_turn(
-        graph=graph,
-        conversation=conversation,
-        content=body.content,
-        session=session,
-    )
-    return ChatPostResponse(conversation=conversation_read, bot_reply=bot_reply)
+    conversation_read = ConversationRead.model_validate(turn.conversation)
+    return ChatPostResponse(conversation=conversation_read, bot_reply=turn.bot_reply)
 
 
 @router.post("/conversations/{conversation_id}/bot", response_model=ConversationRead)

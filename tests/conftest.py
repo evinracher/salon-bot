@@ -13,6 +13,12 @@ from app.db import engine
 from app.main import app
 
 
+@pytest.fixture(autouse=True)
+def _disable_whatsapp_bullmq_redis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid connecting to Redis/BullMQ during tests unless explicitly overridden."""
+    monkeypatch.setattr(settings, "redis_url", "")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _alembic_upgrade() -> None:
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))

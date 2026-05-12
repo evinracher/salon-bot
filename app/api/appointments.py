@@ -18,6 +18,7 @@ from app.schemas.appointment import (
     AppointmentUpdate,
 )
 from app.services.datetime_utils import (
+    ensure_aware_in_timezone,
     is_future_in_reference_tz,
     is_slot_boundary_in_timezone,
     is_slot_duration_aligned,
@@ -77,7 +78,9 @@ def _validate_time_window(start_time: datetime, end_time: datetime) -> None:
 
 
 def _validate_future_start_time(start_time: datetime) -> None:
-    if not is_future_in_reference_tz(start_time):
+    if not is_future_in_reference_tz(
+        start_time, reference_timezone_name=settings.timezone
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="start_time must be in the future",
@@ -118,6 +121,12 @@ async def create_appointment(
     body: AppointmentCreate,
     session: SessionDep,
 ) -> Appointment:
+    body = body.model_copy(
+        update={
+            "start_time": ensure_aware_in_timezone(body.start_time, settings.timezone),
+            "end_time": ensure_aware_in_timezone(body.end_time, settings.timezone),
+        }
+    )
     await _ensure_refs_exist(
         session, body.customer_id, body.employee_id, body.service_id
     )
@@ -192,8 +201,14 @@ async def update_appointment(
     target_employee_id = payload.get("employee_id", appointment.employee_id)
     target_service_id = payload.get("service_id", appointment.service_id)
     target_customer_id = payload.get("customer_id", appointment.customer_id)
-    target_start_time = payload.get("start_time", appointment.start_time)
-    target_end_time = payload.get("end_time", appointment.end_time)
+    target_start_time = ensure_aware_in_timezone(
+        payload.get("start_time", appointment.start_time),
+        settings.timezone,
+    )
+    target_end_time = ensure_aware_in_timezone(
+        payload.get("end_time", appointment.end_time),
+        settings.timezone,
+    )
     target_status = payload.get("status", AppointmentStatus(appointment.status))
 
     _validate_time_window(target_start_time, target_end_time)
@@ -221,6 +236,10 @@ async def update_appointment(
             )
 
     for key, value in payload.items():
+        if key == "start_time":
+            value = target_start_time
+        elif key == "end_time":
+            value = target_end_time
         setattr(
             appointment,
             key,

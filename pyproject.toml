@@ -27,7 +27,13 @@ dependencies = [
     "sqlalchemy>=2.0.49",
     "structlog>=25.5.0",
     "uvicorn[standard]>=0.46.0",
+    "bullmq>=1.2.0",
+    "httpx>=0.28.1",
+    "langchain-openai>=0.3.0",
 ]
+
+[tool.uv.extra-build-dependencies]
+bullmq = ["redis", "semver", "msgpack"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -39,10 +45,10 @@ asyncio_default_test_loop_scope = "session"
 [tool.mypy]
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
+mypy_path = ["typings"]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "mypy>=2.0.0",
     "pre-commit>=4.6.0",
     "pytest>=9.0.3",

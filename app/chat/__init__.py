@@ -1,3 +1,1 @@
-from app.chat.bootstrap import chat_lifespan, register_chat_routers
-
-__all__ = ["chat_lifespan", "register_chat_routers"]
+"""Chat package: import from submodules (e.g. `app.chat.bootstrap`) to avoid heavy imports on `import app.chat`."""

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat.agent.runner import inject_manual_ai_message, run_turn
 from app.chat.models.conversation import Conversation
+from app.config import settings
 
 
 class DummyGraph:
@@ -28,11 +29,12 @@ class DummyGraph:
 @pytest.mark.asyncio
 async def test_run_turn_uses_conversation_id_as_thread_id() -> None:
     graph = DummyGraph()
-    conversation = cast(Conversation, SimpleNamespace(id=42))
+    conversation = cast(Conversation, SimpleNamespace(id=42, customer_id=99))
     session = cast(AsyncSession, object())
     reply = await run_turn(graph, conversation, "hello", session=session)
     assert reply == "runner-ok"
-    assert graph.last_invoke_config == {"configurable": {"thread_id": "42"}}
+    assert graph.last_invoke_config["configurable"] == {"thread_id": "42"}
+    assert graph.last_invoke_config["recursion_limit"] == settings.chat_max_tool_iters
 
 
 @pytest.mark.asyncio
@@ -44,4 +46,5 @@ async def test_manual_injection_updates_state_thread_id() -> None:
         conversation_id=7,
         content="manual",
     )
-    assert graph.last_update_config == {"configurable": {"thread_id": "7"}}
+    assert graph.last_update_config["configurable"] == {"thread_id": "7"}
+    assert graph.last_update_config["recursion_limit"] == settings.chat_max_tool_iters

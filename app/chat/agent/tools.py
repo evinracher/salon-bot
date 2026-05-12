@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timedelta
 
 from langchain_core.tools import tool
@@ -25,20 +26,26 @@ def _get_session():
     return session
 
 
+def _as_tool_str(payload: object) -> str:
+    """Groq requires tool message content as a string (JSON text)."""
+    return json.dumps(payload, default=str)
+
+
 @tool
-async def list_employees() -> list[dict]:
+async def list_employees() -> str:
     """List all employees."""
     session = _get_session()
     rows = list((await session.scalars(select(Employee).order_by(Employee.id))).all())
-    return [{"id": row.id, "name": row.name, "phone": row.phone} for row in rows]
+    payload = [{"id": row.id, "name": row.name, "phone": row.phone} for row in rows]
+    return _as_tool_str(payload)
 
 
 @tool
-async def list_services() -> list[dict]:
+async def list_services() -> str:
     """List all services."""
     session = _get_session()
     rows = list((await session.scalars(select(Service).order_by(Service.id))).all())
-    return [
+    payload = [
         {
             "id": row.id,
             "name": row.name,
@@ -47,10 +54,11 @@ async def list_services() -> list[dict]:
         }
         for row in rows
     ]
+    return _as_tool_str(payload)
 
 
 @tool
-async def check_availability(employee_id: int, date_value: str) -> list[dict]:
+async def check_availability(employee_id: int, date_value: str) -> str:
     """List available slots for an employee on a date (YYYY-MM-DD)."""
     session = _get_session()
     target_date = date.fromisoformat(date_value)
@@ -61,7 +69,7 @@ async def check_availability(employee_id: int, date_value: str) -> list[dict]:
     )
     service_ids = [row[0] for row in relations.all()]
     if not service_ids:
-        return []
+        return _as_tool_str([])
 
     service_durations = {
         row.id: row.duration_minutes
@@ -70,7 +78,7 @@ async def check_availability(employee_id: int, date_value: str) -> list[dict]:
         ).all()
     }
     if not service_durations:
-        return []
+        return _as_tool_str([])
 
     min_duration = min(service_durations.values())
     from app.config import settings
@@ -83,7 +91,7 @@ async def check_availability(employee_id: int, date_value: str) -> list[dict]:
         business_days=settings.business_weekdays,
     )
     if window is None:
-        return []
+        return _as_tool_str([])
     open_dt, close_dt = window
     candidate_slots = generate_candidate_slots(
         open_dt=open_dt,
@@ -92,7 +100,7 @@ async def check_availability(employee_id: int, date_value: str) -> list[dict]:
         service_duration_minutes=min_duration,
     )
     if not candidate_slots:
-        return []
+        return _as_tool_str([])
 
     result = await session.execute(
         select(Appointment.start_time, Appointment.end_time).where(
@@ -109,11 +117,12 @@ async def check_availability(employee_id: int, date_value: str) -> list[dict]:
         )
         for start, end in result.all()
     ]
-    return [
+    payload = [
         {"start": start.isoformat(), "end": end.isoformat()}
         for start, end in candidate_slots
         if not has_overlap(start=start, end=end, appointments=appointments)
     ]
+    return _as_tool_str(payload)
 
 
 @tool
@@ -122,7 +131,7 @@ async def book_appointment(
     employee_id: int,
     service_id: int,
     start_time: str,
-) -> dict:
+) -> str:
     """Create a scheduled appointment for a customer."""
     session = _get_session()
     start = datetime.fromisoformat(start_time)
@@ -141,16 +150,18 @@ async def book_appointment(
     session.add(appointment)
     await session.commit()
     await session.refresh(appointment)
-    return {
-        "appointment_id": appointment.id,
-        "start_time": appointment.start_time.isoformat(),
-        "end_time": appointment.end_time.isoformat(),
-        "status": appointment.status,
-    }
+    return _as_tool_str(
+        {
+            "appointment_id": appointment.id,
+            "start_time": appointment.start_time.isoformat(),
+            "end_time": appointment.end_time.isoformat(),
+            "status": appointment.status,
+        }
+    )
 
 
 @tool
-async def cancel_appointment(appointment_id: int) -> dict:
+async def cancel_appointment(appointment_id: int) -> str:
     """Cancel an appointment by id."""
     session = _get_session()
     appointment = await session.get(Appointment, appointment_id)
@@ -159,7 +170,9 @@ async def cancel_appointment(appointment_id: int) -> dict:
     appointment.status = AppointmentStatus.CANCELLED.value
     await session.commit()
     await session.refresh(appointment)
-    return {"appointment_id": appointment.id, "status": appointment.status}
+    return _as_tool_str(
+        {"appointment_id": appointment.id, "status": appointment.status}
+    )
 
 
 ALL_TOOLS = [

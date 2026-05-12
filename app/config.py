@@ -1,7 +1,7 @@
 from datetime import time
-from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,48 +12,84 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    db_user: str = "user"
-    db_password: str = "password"
-    db_host: str = "127.0.0.1"
-    db_port: int = 5433
+    database_url: str = Field(
+        ...,
+        min_length=1,
+        description="SQLAlchemy async URL, e.g. postgresql+asyncpg://user:pass@host:port/dbname",
+    )
+
     app_port: int = 8000
-    db_name: str = "salon_bot"
-    test_db_name: str = "salon_bot_test"
     timezone: str = "America/Bogota"
     slot_interval_minutes: int = 30
     business_open_time: time = time(hour=10, minute=0)
     business_close_time: time = time(hour=19, minute=0)
     business_days: str = "mon,tue,wed,thu,fri,sat"
 
-    # Optional explicit env var overrides; computed if omitted.
-    database_url: str = ""
-    test_database_url: str = ""
+    # Chat agent LLM (groq or openai). Model + API keys are read from env.
+    chat_llm_provider: str = Field(
+        default="groq",
+        description="Chat agent backend: 'groq' or 'openai' (case-insensitive).",
+    )
+    groq_api_key: str = ""
+    groq_model: str = Field(
+        default="llama-3.1-8b-instant",
+        description="Groq model id (prefer smaller models for cost/latency).",
+    )
+    openai_api_key: str = ""
+    openai_model: str = Field(
+        default="gpt-4o-mini",
+        description="OpenAI chat model when chat_llm_provider=openai (prefer small models).",
+    )
+    groq_fallback_models: str = Field(
+        default="",
+        description=(
+            "Comma-separated Groq model ids to try when the primary model fails with "
+            "rate limits (429). Example: llama-3.1-8b-instant,llama-3.3-70b-specdec"
+        ),
+    )
+    chat_max_tool_iters: int = 12
 
-    @model_validator(mode="before")
+    # Redis / BullMQ (WhatsApp async processing)
+    redis_url: str = Field(
+        default="",
+        description="Redis URL for BullMQ, e.g. redis://127.0.0.1:6379/0",
+    )
+    whatsapp_queue_name: str = "whatsapp-inbound"
+    whatsapp_worker_concurrency: int = Field(default=2, ge=1, le=64)
+    whatsapp_job_attempts: int = Field(default=3, ge=1, le=10)
+
+    # Meta WhatsApp Cloud API
+    whatsapp_verify_token: str = Field(
+        default="",
+        description="Must match the Verify Token set in Meta webhook configuration",
+    )
+    whatsapp_access_token: str = Field(
+        default="",
+        description="Graph API permanent or system user token with whatsapp business permissions",
+    )
+    whatsapp_phone_number_id: str = Field(
+        default="",
+        description="WhatsApp phone number ID from Meta app dashboard",
+    )
+    whatsapp_graph_api_version: str = "v21.0"
+    whatsapp_app_secret: str = Field(
+        default="",
+        description=(
+            "Meta app secret for webhook HMAC (X-Hub-Signature-256). "
+            "When empty, signature verification is skipped (dev only)."
+        ),
+    )
+
+    @field_validator("groq_api_key", "openai_api_key", mode="before")
     @classmethod
-    def build_database_urls(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-
-        payload = dict(data)
-        db_user = payload.get("db_user", "user")
-        db_password = payload.get("db_password", "password")
-        db_host = payload.get("db_host", "127.0.0.1")
-        db_port = payload.get("db_port", 5433)
-        db_name = payload.get("db_name", "salon_bot")
-        test_db_name = payload.get("test_db_name", "salon_bot_test")
-
-        if not payload.get("database_url"):
-            payload["database_url"] = (
-                f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-            )
-
-        if not payload.get("test_database_url"):
-            payload["test_database_url"] = (
-                f"postgresql+asyncpg://{db_user}:{db_password}"
-                f"@{db_host}:{db_port}/{test_db_name}"
-            )
-        return payload
+    def _strip_llm_api_keys(cls, value: object) -> str:
+        """Avoid 401s from accidental spaces or wrapping quotes in ``.env``."""
+        if value is None:
+            return ""
+        text = str(value).strip()
+        if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
+            text = text[1:-1].strip()
+        return text
 
     @staticmethod
     def parse_business_days(value: str) -> frozenset[int]:
@@ -84,11 +120,29 @@ class Settings(BaseSettings):
             raise ValueError("business_close_time must be after business_open_time")
         if not self.parse_business_days(self.business_days):
             raise ValueError("business_days must not be empty")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            msg = f"Invalid IANA timezone in TIMEZONE: {self.timezone!r}"
+            raise ValueError(msg) from exc
+        provider = (self.chat_llm_provider or "").strip().lower()
+        if provider not in ("groq", "openai"):
+            raise ValueError(
+                f"chat_llm_provider must be 'groq' or 'openai', got {self.chat_llm_provider!r}",
+            )
+        self.chat_llm_provider = provider
         return self
 
     @property
     def business_weekdays(self) -> frozenset[int]:
         return self.parse_business_days(self.business_days)
+
+    @property
+    def groq_fallback_model_names(self) -> tuple[str, ...]:
+        raw = self.groq_fallback_models.strip()
+        if not raw:
+            return ()
+        return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
 settings = Settings()

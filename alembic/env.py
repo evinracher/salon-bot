@@ -1,16 +1,24 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from alembic import context
+from app.chat.models.conversation import Conversation
 from app.config import settings
 from app.db import Base, asyncpg_connect_args
-from app.models import Appointment, Employee, EmployeeService, Service
+from app.models import Appointment, Customer, Employee, EmployeeService, Service
 
-_model_registry = (Appointment, Employee, EmployeeService, Service)
+_model_registry = (
+    Appointment,
+    Conversation,
+    Customer,
+    Employee,
+    EmployeeService,
+    Service,
+)
 
 config = context.config
 if config.config_file_name is not None:

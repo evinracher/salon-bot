@@ -15,13 +15,25 @@ dependencies = [
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
     "fastapi>=0.136.1",
+    "langchain>=0.3.27",
+    "langchain-groq>=0.3.8",
+    "langgraph>=0.6.11",
+    "langgraph-checkpoint-postgres>=2.0.23",
+    "psycopg[binary]>=3.2.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.0",
+    "python-dotenv>=1.0.0",
     "redis>=7.4.0",
     "sqlalchemy>=2.0.49",
     "structlog>=25.5.0",
     "uvicorn[standard]>=0.46.0",
+    "bullmq>=1.2.0",
+    "httpx>=0.28.1",
+    "langchain-openai>=0.3.0",
 ]
+
+[tool.uv.extra-build-dependencies]
+bullmq = ["redis", "semver", "msgpack"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -30,9 +42,49 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+mypy_path = ["typings"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["typings"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S", "PL", "PT"]
+ignore = [
+    "S101",
+    "PLR0913",
+    "B008",
+    "PLW2901",
+    "PLR2004",
+    "UP042",
+    "S104",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR2004", "PLC0415"]
+"alembic/versions/*" = ["E501", "I001"]
+"app/chat/agent/prompts.py" = ["E501"]
+"app/chat/agent/tools.py" = ["E501"]
+"app/chat/__init__.py" = ["E501"]
+"app/chat/agent/message_repair.py" = ["E501"]
+"alembic/env.py" = ["I001"]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+omit = ["app/chat/agent/protocols.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 70
+
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "mypy>=2.0.0",
     "pre-commit>=4.6.0",
     "pytest>=9.0.3",

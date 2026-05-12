@@ -15,24 +15,18 @@ router = APIRouter(prefix="/employee-services", tags=["employee-services"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-@router.post(
-    "", response_model=EmployeeServiceRead, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=EmployeeServiceRead, status_code=status.HTTP_201_CREATED)
 async def create_employee_service(
     body: EmployeeServiceCreate,
     session: SessionDep,
 ) -> EmployeeService:
     employee = await session.get(Employee, body.employee_id)
     if employee is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
 
     service = await session.get(Service, body.service_id)
     if service is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Service not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
 
     employee_service = EmployeeService(**body.model_dump())
     session.add(employee_service)

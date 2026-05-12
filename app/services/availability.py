@@ -44,6 +44,5 @@ def has_overlap(
     appointments: list[tuple[datetime, datetime]],
 ) -> bool:
     return any(
-        not (end <= appt_start or start >= appt_end)
-        for appt_start, appt_end in appointments
+        not (end <= appt_start or start >= appt_end) for appt_start, appt_end in appointments
     )

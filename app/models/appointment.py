@@ -9,9 +9,7 @@ from app.db import Base
 class Appointment(Base):
     __tablename__ = "appointments"
     __table_args__ = (
-        CheckConstraint(
-            "end_time > start_time", name="ck_appointments_end_after_start"
-        ),
+        CheckConstraint("end_time > start_time", name="ck_appointments_end_after_start"),
         CheckConstraint(
             "status IN ('scheduled','confirmed','completed','cancelled','no_show')",
             name="ck_appointments_status_valid",
@@ -25,8 +23,9 @@ class Appointment(Base):
     service_id: Mapped[int] = mapped_column(
         ForeignKey("services.id", ondelete="RESTRICT"),
     )
-    client_name: Mapped[str] = mapped_column(String(120))
-    client_phone: Mapped[str] = mapped_column(String(32))
+    customer_id: Mapped[int] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+    )
     start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(20), default="scheduled")

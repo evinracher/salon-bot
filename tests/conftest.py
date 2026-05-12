@@ -3,14 +3,20 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from alembic import command
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
+from alembic import command
 from app.config import settings
 from app.db import engine
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _disable_whatsapp_bullmq_redis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid connecting to Redis/BullMQ during tests unless explicitly overridden."""
+    monkeypatch.setattr(settings, "redis_url", "")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -25,7 +31,8 @@ async def _truncate_tables() -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE employees, services, employee_services, appointments "
+                "TRUNCATE employees, services, customers, conversations, "
+                "employee_services, appointments "
                 "RESTART IDENTITY CASCADE",
             ),
         )
@@ -33,7 +40,8 @@ async def _truncate_tables() -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE employees, services, employee_services, appointments "
+                "TRUNCATE employees, services, customers, conversations, "
+                "employee_services, appointments "
                 "RESTART IDENTITY CASCADE",
             ),
         )

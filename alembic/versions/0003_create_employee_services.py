@@ -9,6 +9,7 @@ Create Date: 2026-05-07
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0003_employee_services"
@@ -48,9 +49,7 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_employee_services")),
-        sa.UniqueConstraint(
-            "employee_id", "service_id", name="uq_employee_services_pair"
-        ),
+        sa.UniqueConstraint("employee_id", "service_id", name="uq_employee_services_pair"),
     )
 
 

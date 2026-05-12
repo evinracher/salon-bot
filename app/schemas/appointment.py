@@ -13,10 +13,9 @@ class AppointmentStatus(str, Enum):
 
 
 class AppointmentCreate(BaseModel):
+    customer_id: int = Field(gt=0)
     employee_id: int = Field(gt=0)
     service_id: int = Field(gt=0)
-    client_name: str = Field(min_length=1, max_length=120)
-    client_phone: str = Field(min_length=1, max_length=32)
     start_time: datetime
     end_time: datetime
     status: AppointmentStatus = AppointmentStatus.SCHEDULED
@@ -29,10 +28,9 @@ class AppointmentCreate(BaseModel):
 
 
 class AppointmentUpdate(BaseModel):
+    customer_id: int | None = Field(default=None, gt=0)
     employee_id: int | None = Field(default=None, gt=0)
     service_id: int | None = Field(default=None, gt=0)
-    client_name: str | None = Field(default=None, min_length=1, max_length=120)
-    client_phone: str | None = Field(default=None, min_length=1, max_length=32)
     start_time: datetime | None = None
     end_time: datetime | None = None
     status: AppointmentStatus | None = None
@@ -52,10 +50,9 @@ class AppointmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    customer_id: int
     employee_id: int
     service_id: int
-    client_name: str
-    client_phone: str
     start_time: datetime
     end_time: datetime
     status: AppointmentStatus

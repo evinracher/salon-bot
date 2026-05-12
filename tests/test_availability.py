@@ -1,5 +1,5 @@
-from httpx import AsyncClient
 import pytest
+from httpx import AsyncClient
 
 
 async def _create_employee(client: AsyncClient, suffix: str) -> dict:
@@ -24,9 +24,16 @@ async def _create_service(client: AsyncClient, suffix: str, duration: int) -> di
     ).json()
 
 
-async def _link_employee_service(
-    client: AsyncClient, employee_id: int, service_id: int
-) -> None:
+async def _create_customer(client: AsyncClient, suffix: str) -> dict:
+    return (
+        await client.post(
+            "/customers",
+            json={"name": f"Cust{suffix}", "phone": f"+1-666-{suffix}00"},
+        )
+    ).json()
+
+
+async def _link_employee_service(client: AsyncClient, employee_id: int, service_id: int) -> None:
     response = await client.post(
         "/employee-services",
         json={"employee_id": employee_id, "service_id": service_id},
@@ -55,17 +62,13 @@ async def test_availability_service_day_returns_expected_slot_counts(
     await _link_employee_service(client, employee["id"], service_30["id"])
     await _link_employee_service(client, employee["id"], service_90["id"])
 
-    resp_30 = await client.get(
-        f"/availability?service_id={service_30['id']}&date=2026-05-11"
-    )
+    resp_30 = await client.get(f"/availability?service_id={service_30['id']}&date=2026-05-11")
     assert resp_30.status_code == 200
     body_30 = resp_30.json()
     assert len(body_30["slots"]) == 18
     assert body_30["slots"][0]["employee_ids"] == [employee["id"]]
 
-    resp_90 = await client.get(
-        f"/availability?service_id={service_90['id']}&date=2026-05-11"
-    )
+    resp_90 = await client.get(f"/availability?service_id={service_90['id']}&date=2026-05-11")
     assert resp_90.status_code == 200
     body_90 = resp_90.json()
     assert len(body_90["slots"]) == 16
@@ -102,6 +105,7 @@ async def test_availability_employee_filter_and_union_behavior(
 ) -> None:
     employee_1 = await _create_employee(client, "a5")
     employee_2 = await _create_employee(client, "a6")
+    customer = await _create_customer(client, "a5")
     service = await _create_service(client, "a5", duration=30)
     await _link_employee_service(client, employee_1["id"], service["id"])
     await _link_employee_service(client, employee_2["id"], service["id"])
@@ -109,32 +113,29 @@ async def test_availability_employee_filter_and_union_behavior(
     appointment = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee_1["id"],
             "service_id": service["id"],
-            "client_name": "Busy",
-            "client_phone": "+1-777-1000",
-            "start_time": "2026-05-11T10:00:00-05:00",
-            "end_time": "2026-05-11T10:30:00-05:00",
+            "start_time": "2030-06-03T10:00:00-05:00",
+            "end_time": "2030-06-03T10:30:00-05:00",
             "status": "scheduled",
         },
     )
     assert appointment.status_code == 201
 
     employee_resp = await client.get(
-        f"/availability?service_id={service['id']}&employee_id={employee_1['id']}&date=2026-05-11"
+        f"/availability?service_id={service['id']}&employee_id={employee_1['id']}&date=2030-06-03"
     )
     assert employee_resp.status_code == 200
     employee_slots = _slot_starts(employee_resp.json())
-    assert "2026-05-11T10:00:00-05:00" not in employee_slots
+    assert "2030-06-03T10:00:00-05:00" not in employee_slots
 
-    union_resp = await client.get(
-        f"/availability?service_id={service['id']}&date=2026-05-11"
-    )
+    union_resp = await client.get(f"/availability?service_id={service['id']}&date=2030-06-03")
     assert union_resp.status_code == 200
     union_body = union_resp.json()
     union_slots = _slot_starts(union_body)
-    assert "2026-05-11T10:00:00-05:00" in union_slots
-    assert _slot_by_start(union_body, "2026-05-11T10:00:00-05:00")["employee_ids"] == [
+    assert "2030-06-03T10:00:00-05:00" in union_slots
+    assert _slot_by_start(union_body, "2030-06-03T10:00:00-05:00")["employee_ids"] == [
         employee_2["id"]
     ]
 
@@ -157,35 +158,33 @@ async def test_availability_cancelled_appointment_does_not_block(
     client: AsyncClient,
 ) -> None:
     employee = await _create_employee(client, "a8")
+    customer = await _create_customer(client, "a8")
     service = await _create_service(client, "a8", duration=30)
     await _link_employee_service(client, employee["id"], service["id"])
 
     cancelled = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "client_name": "Cancelled",
-            "client_phone": "+1-777-1001",
-            "start_time": "2026-05-11T10:00:00-05:00",
-            "end_time": "2026-05-11T10:30:00-05:00",
+            "start_time": "2030-06-03T10:00:00-05:00",
+            "end_time": "2030-06-03T10:30:00-05:00",
             "status": "cancelled",
         },
     )
     assert cancelled.status_code == 201
 
     resp = await client.get(
-        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2026-05-11"
+        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2030-06-03"
     )
     assert resp.status_code == 200
-    assert "2026-05-11T10:00:00-05:00" in _slot_starts(resp.json())
+    assert "2030-06-03T10:00:00-05:00" in _slot_starts(resp.json())
 
 
 @pytest.mark.asyncio
 async def test_availability_unknown_ids_return_404(client: AsyncClient) -> None:
-    missing_service = await client.get(
-        "/availability?service_id=999999&date=2026-05-11"
-    )
+    missing_service = await client.get("/availability?service_id=999999&date=2026-05-11")
     assert missing_service.status_code == 404
 
     service = await _create_service(client, "a9", duration=30)
@@ -220,30 +219,30 @@ async def test_availability_restarts_exactly_at_appointment_end(
     client: AsyncClient,
 ) -> None:
     employee = await _create_employee(client, "b2")
+    customer = await _create_customer(client, "b2")
     service = await _create_service(client, "b2", duration=30)
     await _link_employee_service(client, employee["id"], service["id"])
 
     existing = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "client_name": "Boundary",
-            "client_phone": "+1-777-1111",
-            "start_time": "2026-05-11T11:00:00-05:00",
-            "end_time": "2026-05-11T11:30:00-05:00",
+            "start_time": "2030-06-03T11:00:00-05:00",
+            "end_time": "2030-06-03T11:30:00-05:00",
             "status": "scheduled",
         },
     )
     assert existing.status_code == 201
 
     resp = await client.get(
-        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2026-05-11"
+        f"/availability?service_id={service['id']}&employee_id={employee['id']}&date=2030-06-03"
     )
     assert resp.status_code == 200
     starts = _slot_starts(resp.json())
-    assert "2026-05-11T11:00:00-05:00" not in starts
-    assert "2026-05-11T11:30:00-05:00" in starts
+    assert "2030-06-03T11:00:00-05:00" not in starts
+    assert "2030-06-03T11:30:00-05:00" in starts
 
 
 @pytest.mark.asyncio
@@ -251,16 +250,16 @@ async def test_availability_rejects_microsecond_appointment_payload(
     client: AsyncClient,
 ) -> None:
     employee = await _create_employee(client, "b3")
+    customer = await _create_customer(client, "b3")
     service = await _create_service(client, "b3", duration=60)
     await _link_employee_service(client, employee["id"], service["id"])
 
     appointment = await client.post(
         "/appointments",
         json={
+            "customer_id": customer["id"],
             "employee_id": employee["id"],
             "service_id": service["id"],
-            "client_name": "Micro",
-            "client_phone": "+1-777-1112",
             "start_time": "2026-05-07T15:00:00.075000Z",
             "end_time": "2026-05-07T16:30:00.075000Z",
             "status": "scheduled",
